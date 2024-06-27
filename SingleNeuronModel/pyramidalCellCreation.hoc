@@ -1,0 +1,28 @@
+/****************************************************************************************************************************************
+
+    Description: Creates instance(s) of pyramidal cell(s) from the template.
+
+    Edit History: Created by Nilapratim Sengupta in December 2021.
+                  Modified by Nilapratim Sengupta in May 2022.
+                  Modified by Nilapratim Sengupta in June 2022 for independent attachment of axon.
+
+****************************************************************************************************************************************/
+
+/* Loading the pyramidal cell template */
+load_file("pyramidalCellTemplate.hoc")
+load_file("pyramidalAxonTemplate.hoc")
+
+
+/* Declaring object references */
+objref pyramidalCell,pyramidalAxon
+
+
+/* Instantiating pyramidal cell with axon */
+pyramidalCell = new template_pyramidalCell()
+pyramidalAxon = new template_pyramidalAxon()
+
+
+/* Connecting the axon to the cell body */
+pyramidalCell.comp[1] connect pyramidalAxon.hill(0), 0.5
+
+

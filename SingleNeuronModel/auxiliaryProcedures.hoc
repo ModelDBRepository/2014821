@@ -1,0 +1,699 @@
+/******************************************************************************************************************************************
+
+    Description: File listing auxiliary procedures and functions for loading data, computing firing rates and conduction velocity in axon.
+
+    Edit History: Created by Christina Weaver in May 2020.
+                  Modified by Nilapratim Sengupta in December 2021.
+                  Modified by Tony Weaver in February 2022.
+                  Modified by Nilapratim Sengupta in March 2022.
+                  Modified by Nilapratim Sengupta in April 2022 to include demyelination and flag checking at multiple locations.
+                  Modified by Nilapratim Sengupta in May 2022 to incorporate remyelination.
+                  Modified by Nilapratim Sengupta in June 2022 to have common code for myelin dystrophies.
+******************************************************************************************************************************************/
+
+/* Declaring object references - as they cannot be declared within procedures or functions */
+objref proximalSpikeTimes, distalSpikeTimes, proximalAPCount, distalAPCount, interSpikeInterval, firingRate, interSpikeIntervalDistal, firingRateDistal, temporaryVector
+objref juxtaparanodeAPCountProximal, juxtaparanodeAPCountDistal, internodeAPCountProximal, internodeAPCountDistal, nodeAPCount, outputFile, outputFileDetails
+
+/* Create a ParallelContext here so it exists wherever we need it in this file -- TW*/
+objref pc
+pc = new ParallelContext()
+
+/* To hold some info(arguments) about an individual parallel run -- TW */
+objref mpiJob
+
+/* Holds calculated values from an individual parallel run since a function only returns one value -- TW */
+objref mpiJobRes
+
+
+/* These will eventually hold different individual result values
+ * In the order they would be if simulations were run in serial.
+ * The first two values come originally from run_Simulation
+ * The last three come originally from meanFRandCV
+ * popRes -- population number/ID
+ * perturbRes -- perturbation number/ID
+ * injRes -- injection value
+ * mfrRes -- mean firing rate
+ * mfrdRes -- mean firing rate distal
+ * apcRes -- AP count
+ * apcdRes -- AP count distal
+ * cvRes -- conduction velocity
+ * outflagRes -- outcome flag
+ *
+ * -- TW
+ */
+objref popRes, perturbRes, injRes, mfrRes, mfrdRes, apcRes, apcdRes, cvRes, outflagRes
+totalJobs = 0
+totalRunTime = 0.0
+
+/****************************************************************************************************************************************
+    Name: proc_setAPCounters()
+    Type: Procedure
+
+    Input Parameter(s): None
+    Return Parameter: None
+
+    Description: Procedure to set up AP counters at proximal and distal locations for calculation of firing rate, conduction velocity.
+
+    Edit History: Created by Christina Weaver in May 2020.
+                  Modified by Nilapratim Sengupta in December 2021.  
+****************************************************************************************************************************************/
+proc proc_setAPCounters() {
+
+    /* For proximal location */
+    proximalSpikeTimes = new Vector() 
+    if (proximalLocationFlag==0) {
+        pyramidalAxon.iseg {                
+            proximalAPCount = new APCount(0.5)
+            proximalAPCount.thresh = 10 //(mV)     
+            proximalAPCount.record(proximalSpikeTimes)
+        }
+    } else {
+        pyramidalAxon.nodes[proximalLocation] {                
+            proximalAPCount = new APCount(0.5)
+            proximalAPCount.thresh = 10 //(mV)       
+            proximalAPCount.record(proximalSpikeTimes)
+        }
+    }
+
+    /* For distal location */
+    distalSpikeTimes = new Vector() 
+    pyramidalAxon.nodes[distalLocation] {		
+        distalAPCount = new APCount(0.5)
+        distalAPCount.thresh = 10 //(mV)  
+        distalAPCount.record(distalSpikeTimes)
+    }
+
+    /* For juxtaparanode */
+    pyramidalAxon.juxtaparanodes[proximalLocation] {		
+        juxtaparanodeAPCountProximal = new APCount(0.5)
+        juxtaparanodeAPCountProximal.thresh = 0 //(mV)
+    }
+    pyramidalAxon.juxtaparanodes[distalLocation] {		
+        juxtaparanodeAPCountDistal = new APCount(0.5)
+        juxtaparanodeAPCountDistal.thresh = 0 //(mV)
+    }
+
+    /* For internode */
+    pyramidalAxon.internodes[proximalLocation] {		
+        internodeAPCountProximal = new APCount(0.5)
+        internodeAPCountProximal.thresh = 0 //(mV)
+    }
+    pyramidalAxon.internodes[distalLocation] {		
+        internodeAPCountDistal = new APCount(0.5)
+        internodeAPCountDistal.thresh = 0 //(mV)
+    }
+
+    /* For node */
+    pyramidalAxon.nodes[1] {		
+        nodeAPCount = new APCount(0.5)
+        nodeAPCount.thresh = 30 //(mV)
+    }
+
+} // End of proc_setAPCounters()
+
+
+/****************************************************************************************************************************************
+    Name: func_calculateFiringRate()
+    Type: Function
+
+    Input Parameter(s): 1. startTime (left end-point of time-window)
+                        2. stopTime (right end-point of time-window)
+                        3. printingFlag (0: no-action; 1: print info)
+    Return Parameter: firingRate
+
+    Description: Function to calculate the mean firing rate (and coefficient of variance) during a specified time window.
+
+    Edit History: Created by Christina Weaver in May 2020.
+                  Modified by Nilapratim Sengupta in December 2021.  
+                  Modified by Tony Weaver in February 2022 to remove prints to terminal
+****************************************************************************************************************************************/
+func func_calculateFiringRate() { local loopCounter, tmx
+
+    /* Creating necessaryvectors */
+    interSpikeInterval = new Vector()
+    firingRate = new Vector()
+
+    /* Calculating firing rates considering all inter-spike intervals within specified time-window */
+    for( loopCounter = 0; loopCounter < proximalAPCount.n-1; loopCounter = loopCounter+1 ) {
+        if( proximalSpikeTimes.x[loopCounter] >= $1 && proximalSpikeTimes.x[loopCounter+1] <= $2) {
+	        interSpikeInterval.append(proximalSpikeTimes.x[loopCounter+1]-proximalSpikeTimes.x[loopCounter])
+    	    firingRate.append(1000/interSpikeInterval.x[interSpikeInterval.size-1])
+        }
+    }
+
+    /* If firing rate could not be computed */
+    if( firingRate.size == 0 ) {
+        return 0.0
+    }
+
+    /* Returning firing rate */
+    return firingRate.mean
+
+} // End of func_calculateFiringRate()
+
+
+
+/****************************************************************************************************************************************
+    Name: func_calculateFiringRateDistal()
+    Type: Function
+
+    Input Parameter(s): 1. startTime (left end-point of time-window)
+                        2. stopTime (right end-point of time-window)
+                        3. printingFlag (0: no-action; 1: print info)
+    Return Parameter: firingRateDistal
+
+    Description: Function to calculate the mean firing rate at the distal end (and coefficient of variance) during a specified time window.
+
+    Edit History: Created by Nilapratim Sengupta in May 2022.  
+****************************************************************************************************************************************/
+func func_calculateFiringRateDistal() { local loopCounter, tmx
+
+    /* Creating necessaryvectors */
+    interSpikeIntervalDistal = new Vector()
+    firingRateDistal = new Vector()
+
+    /* Calculating firing rates considering all inter-spike intervals within specified time-window */
+    for( loopCounter = 0; loopCounter < distalAPCount.n-1; loopCounter = loopCounter+1 ) {
+        if( distalSpikeTimes.x[loopCounter] >= $1 && distalSpikeTimes.x[loopCounter+1] <= tstop) { // Upper limit changed to tstop on 20220725
+	        interSpikeIntervalDistal.append(distalSpikeTimes.x[loopCounter+1]-distalSpikeTimes.x[loopCounter])
+    	    firingRateDistal.append(1000/interSpikeIntervalDistal.x[interSpikeIntervalDistal.size-1])
+        }
+    }
+
+    /* If firing rate at distal end could not be computed */
+    if( firingRateDistal.size == 0 ) {
+        return 0.0
+    }
+
+    /* Returning firing rate at distal end */
+    return firingRateDistal.mean
+
+} // End of func_calculateFiringRateDistal()
+
+
+
+/*************************************************************************************************************************************************
+    Name: func_evaluateFRandCV()
+    Type: Function
+
+    Input Parameter(s): 1. startTime (left end-point of time-window in ms)
+                        2. stopTime (right end-point of time-window in ms)
+                        3. Vector containing population number, perturbation number and currentAmplitude (amplitude of stimulating current in nA)
+                           Stores results of the calculations done here
+                        4. printingFlag (0: no-action; 1: print info)
+                        5. MPI job ID
+    Return Parameter: firingRate, but really a vector with multiple values
+
+    Description: Function to calculate the mean firing rate (and coefficient of variance) during a specified time window.
+
+    Edit History: Created by Christina Weaver in May 2020.
+                  Modified by Nilapratim Sengupta in December 2021.  
+                  Modified by Nilapratim Sengupta in February 2022 to include outcomeFlag updation.
+                  Modified by Tony Weaver in February 2022.
+                  1. Removed file writing here.  Once calculation completes return all relevant values
+                  2. In order to "return" multiple values storing them in a Vector that's passed in as arg 3
+                  3. Reformatted prints to terminal to aid in debugging.  Once running, commented them out
+                  Modified by Nilapratim Sengupta in April 2022 to include demyelination.
+                  Modified by Nilapratim Sengupta in May 2022 to incorporate remyelination.
+                  Modified by Nilapratim Sengupta in June 2022 to have a common code for myelin dystrophies.
+**************************************************************************************************************************************************/
+func func_evaluateFRandCV() {  local populationCounter, perturbationCounter, internodeCounter, meanFiringRate, conductionDistance, conductionTime, conductionVelocity, proximalTime, distalTime, id
+
+    id = $5
+
+    /* Updating tstop with input parameter */
+    tstop = $2 + 100 // tstop increased to account for conduction delay on 20220725
+
+
+    /* Set additional parameters
+     * In serial version, this was done in run_Simulation
+     * Must be done here for parallel processing otherwise
+     * The individual run() executed in this function won't have the correct information 
+     * -- TW
+     */
+
+    /* Retrieving morphology and perturbation details from the input */
+    populationCounter = $o3.x[0]
+    perturbationCounter = $o3.x[1]
+
+    proc_updateRemyelinatedAxon(populationCounter, perturbationCounter)
+    proc_setAxonMorphology(matrix_axonMorphologies.getrow(populationCounter))
+    proc_calculateAxonParameters(axonDiameter, nodeLength, myelinSheathLength, numOfLamellae, lamellaThickness, gRatio)
+    proc_setPyramidalCellGeometry()
+    proc_setPyramidalCellBiophysics()
+    proc_spineCorrection()
+    proc_setConductances()
+    proc_setKinetics()
+
+    /* Implementing the perturbations */  
+    for (internodeCounter=0; internodeCounter<noOfInternodes; internodeCounter=internodeCounter+1) {
+
+        numOfLamellaeTemporary = vector_axonPerturbationsLamellae.x[internodeCounter] * numOfLamellae
+
+        if (vector_axonPerturbationsInternodes.x[internodeCounter]==1) {
+            proc_applyDemyelination(axonDiameter, nodeLength, myelinSheathLength, numOfLamellaeTemporary, lamellaThickness, internodeCounter)
+        }
+        if (vector_axonPerturbationsInternodes.x[internodeCounter]==2) {
+            proc_applyRemyelination(axonDiameter, nodeLength, myelinSheathLength, numOfLamellaeTemporary, lamellaThickness, internodeCounter)
+        }
+    }
+
+    /* Updating model parameters finally */
+    proc_setParametersFinal()
+
+    /* Updating amplitude of current stimulus with input parameter */
+    currentStimulus.amp = $o3.x[2]
+
+    /* Setting up AP counters at proximal and distal locations */
+    proc_setAPCounters()
+
+    /* For debugging */
+    //proc_printDetailsOnConsole(populationCounter)
+    proc_plotMembranePotentials()
+
+    /* Running simulation. init() is automatically invoked */
+    run()
+    
+    /* Updating signal-level flags and outcome flag*/
+    signalFlagJuxtaparanode = 0
+    if (juxtaparanodeAPCountProximal.n==0 && juxtaparanodeAPCountDistal.n==0) {
+        signalFlagJuxtaparanode = 1
+    } 
+
+    signalFlagInternode = 0
+    if (internodeAPCountProximal.n==0 && internodeAPCountDistal.n==0) {
+        signalFlagInternode = 1
+    }
+
+    /* Invoking function to calculate the firingRates at proximal and distal ends, storing results in vector passed in as argument -- TW */
+    meanFiringRate = func_calculateFiringRate($1,$2,0) // (1: startTime, 2: stopTime, 3: printingFlag)
+    meanFiringRateDistal = func_calculateFiringRateDistal($1,$2,0) // (1: startTime, 2: stopTime, 3: printingFlag)
+    $o3.append(meanFiringRate)
+    $o3.append(meanFiringRateDistal)
+    $o3.append(proximalAPCount.n)
+    $o3.append(distalAPCount.n)
+
+    /* Calculating conductionDistance */
+    if (proximalLocationFlag==0) {
+        pyramidalAxon.iseg { distance() } 	
+    } else {
+        pyramidalAxon.nodes[proximalLocation] { distance(0, 0.5) }
+    }		
+    pyramidalAxon.nodes[distalLocation] { conductionDistance = distance(0.5) }  
+  
+    /* Determining conductionVelocity */
+    if( proximalAPCount.n > 0 && distalAPCount.n > 0 ) {
+        if( distalAPCount.n == proximalAPCount.n ) {
+            conductionTime = distalSpikeTimes.x[distalAPCount.n-1]-proximalSpikeTimes.x[proximalAPCount.n-1]
+            conductionVelocity = (1e-3 * (conductionDistance / conductionTime))
+            signalFlagNode = 1
+        } else { //SpecialCases: Unequal number of spikes at proximal and distal locations.   
+			if( proximalAPCount.n > 1 && distalAPCount.n > 1) { // Assumes there are at least two spikes; computes conductionVelocity from second.  Assuming first spike is "not typical" of the neuron's behavior.
+				conductionTime = distalSpikeTimes.x[1]-proximalSpikeTimes.x[1]
+				conductionVelocity = (1e-3 * (conductionDistance / conductionTime))
+                signalFlagNode = 2
+			} else { // In this case, there is just one spike at proximal and/or distal location.
+				conductionTime = distalSpikeTimes.x[0]-proximalSpikeTimes.x[0]
+				conductionVelocity = (1e-3 * (conductionDistance / conductionTime))
+                signalFlagNode = 0 // 3
+			}
+        }
+    } else {	// Either or both locations have no spikes
+        proximalTime = 0
+        distalTime = 0
+        if( proximalAPCount.n != 0 ) { 
+            proximalTime = proximalSpikeTimes.x[0] 
+        }
+        if( distalAPCount.n != 0 ) { 
+            distalTime = distalSpikeTimes.x[0] 
+        }
+		conductionVelocity = 0
+        signalFlagNode = 0
+    }
+
+    /* Updating outcome flag */
+    outcomeFlag = 0
+    if (signalFlagJuxtaparanode==1 && signalFlagInternode==1 && signalFlagNode>=1 && meanFiringRate>0) {
+        outcomeFlag = 1
+    }
+
+    /* More results to be stored in the Vector -- TW */
+    $o3.append(conductionVelocity)
+    $o3.append(outcomeFlag)
+
+
+    /* Return results 
+     * using pc.post to essentially return the vector with additional values added to it
+     * so that we can process it properly
+     * -- TW  
+     */
+    pc.post(id, $o3) // Need to post the modified Vector or else when job is retrieved we won't see added values
+    return meanFiringRate
+
+} // End of func_evaluateFRandCV()
+
+
+
+
+
+/****************************************************************************************************************************************
+    Name: proc_runSimulation()
+    Type: Procedure
+
+    Input Parameter(s): 1. startTime (left end-point of time-window in ms)
+                        2. stopTime (right end-point of time-window in ms)
+                        3. Filename (String) : Simulation output
+                        4. Filename (String) : Simulation details
+    Return Parameter: None
+
+    Description: Procedure to run multiple simulations.
+                 Outer loop - for different sets of axon morphologies.
+                 Inner loop - for different levels of current injection.
+
+    Edit History: Created by Nilapratim Sengupta in December 2021.  
+                  Modified by Nilapratim Sengupta in February 2022 to include updation of simulation details.
+                  Modified by Tony Weaver in February 2022.
+                  1. Converted the call to funcEvaluateFRandCV to be executed in parallel
+                  2. Moved printing of the results to after all parallel jobs have completed the FR and CV calculation
+                  Modified by Nilapratim Sengupta in March 2022 to include updation of outputFile (tabular).
+                  Modified by Nilapratim Sengupta in March 2022 to include additional information in detailedOutput File. 
+                  Modified by Nilapratim Sengupta in April 2022 to include demyelination. 
+****************************************************************************************************************************************/
+proc proc_runSimulation() {  local populationCounter, morphologyCounter, perturbationCounter, currentCounter, id, population, perturbation, injection, meanFR, meanFRDistal, apCount, apCountDistal, condVel, outFlag
+
+    /* Creating file to write output */
+	outputFile = new File()
+    outputFileDetails = new File()
+
+    /* Opening the desired file in write-mode */
+	outputFile.wopen($s3)
+    outputFileDetails.wopen($s4)
+	
+    /* Setup each MPI run 
+     * VERY, VERY IMPORTANT: Any code executed after this until pc.done()
+     * is only being run on the master node.  Any worker nodes will not "see"
+     * any of this stuff including anything that might setup important values for the simulation(s)
+     * So things like that either have to be passed as arguments into the function calling run() 
+     * or that function has to call other function(s) to set the necessary simulation parameters
+     * -- TW
+     */
+    pc.runworker()
+
+    /* job ID starts at 1 not 0 because 0 is master job -- TW */
+    id = 1
+	for (populationCounter=0; populationCounter<axonPopulationSize; populationCounter=populationCounter+1) {
+
+        for (perturbationCounter=0; perturbationCounter<noOfAxonPerturbationVariations; perturbationCounter=perturbationCounter+2) { // Increment by 2 since perturbation matrix has two columns per scheme
+
+            /* Inner loop - for different levels of current injection
+            * Setup some basic parameters for this run and submit it to the ParallelCOntext bulletin board for eventual processing
+            * -- TW
+            */
+            for (currentCounter=firstCurrentLevel; currentCounter<=finalCurrentLevel; currentCounter=currentCounter+stepCurrentLevel) {
+
+                totalJobs = totalJobs + 1
+                // printf("\nPrepping job for Population: %d\tPerturbation: %d\t\tInjection: %g\t\tJob ID: %d\n", populationCounter, perturbationCounter/2, currentCounter, id) // Since dystrophy file has 2 columns per perturbation scheme
+                mpiJob = new Vector()
+                mpiJob.append(populationCounter, perturbationCounter, currentCounter) 
+                
+                /* Invoking function to calculate firingRate and conductionVelocity */
+                pc.submit("func_evaluateFRandCV", $1, $2, mpiJob, 1, id)
+                id = id + 1
+
+            }
+        }
+        
+	}
+    /* Initialize some Vectors to hold individual component results
+     * These allow us to hold the resulting values from each run in the order they would be if run serially
+     * becuase otherwise the jobs finish out of order because of parallel processing
+     * -- TW
+     */
+    popRes = new Vector(totalJobs)
+    perturbRes = new Vector(totalJobs)
+    injRes = new Vector(totalJobs)
+    mfrRes = new Vector(totalJobs)
+    mfrdRes = new Vector(totalJobs)
+    apcRes = new Vector(totalJobs)
+    apcdRes = new Vector(totalJobs)
+    cvRes = new Vector(totalJobs)
+    outflagRes = new Vector(totalJobs)
+
+    /* Get results from MPI jobs -- TW */
+    while(pc.working) {
+
+        /* Parse arguments of this particular job submission so we can get the manually assigned  job ID */
+        pc.upkscalar() // Start time
+        pc.upkscalar() // stopTime
+        pc.upkvec() // Vector to hold run info
+        pc.upkscalar() // Print or not
+        id = pc.upkscalar() // MPI job ID
+
+        printf("\nRetrieved a job, id: %d\n\n", id)
+        /* Get the Vector holding the results, it was set at the end of func_evaluateFRandCV via pc.post  -- TW */
+        pc.take(id)
+        mpiJobRes = pc.upkvec()
+
+        /* Subtracting 1 from id because vector indexing starts at 0 but MPI job IDs started at 1 
+         * And storing individual values in appropriate Vectors at appropriate location  -- TW
+         */
+        popRes.x[id-1] = mpiJobRes.x[0]
+        perturbRes.x[id-1] = mpiJobRes.x[1]
+        injRes.x[id-1] = mpiJobRes.x[2]
+        mfrRes.x[id-1] = mpiJobRes.x[3]
+        mfrdRes.x[id-1] = mpiJobRes.x[4]
+        apcRes.x[id-1] = mpiJobRes.x[5]
+        apcdRes.x[id-1] = mpiJobRes.x[6]
+        cvRes.x[id-1] = mpiJobRes.x[7]
+        outflagRes.x[id-1] = mpiJobRes.x[8]
+    }
+    pc.done()
+
+    /* Printing simulation details */
+    /* Printing header */
+    outputFileDetails.printf("\nPrinting simulation details for record keeping.")
+    outputFileDetails.printf("\n=================================================\n")
+
+    outputFileDetails.printf("\nMorphology File for Axon: %s", inputFileNameMorphologies)
+    outputFileDetails.printf("\nPerturbation File for Axon: %s\n", inputFileNamePerturbations)
+
+
+    /* Printing parameters regarding axon morphologies from the LHS file */
+     outputFileDetails.printf("\n\nAxon Population Size = %d", axonPopulationSize)
+     outputFileDetails.printf("\nNo. of Axon Morphology Parameters = %d", noOfAxonMorphologyParameters)
+
+    /* Printing parameters regarding axon perturbations from the Perturbation file */
+     outputFileDetails.printf("\nNo. of Axon Perturbation Variations = %d", noOfAxonPerturbationVariations/2) // Since dystrophy file has 2 columns per perturbation scheme
+
+    /* Printing parameters for the soma, dendrites and myelinated axon implementation */
+     outputFileDetails.printf("\n\nNo. of Compartments for Soma and Dendrites = %d", noOfComp)
+     outputFileDetails.printf("\nNo. of Nodes = %d", noOfNodes)
+     outputFileDetails.printf("\nNo. of ParanodeSets = %d", noOfParanodeSets) 
+     outputFileDetails.printf("\nNo. of Juxtaparanode Sets = %d", noOfJuxtaparanodeSets)
+     outputFileDetails.printf("\nNo of Internodes = %d", noOfInternodes)
+
+    /* Printing parameters for recording */
+     outputFileDetails.printf("\nProximal Location = %d", proximalLocation)
+     outputFileDetails.printf("\nDistal Location = %d", distalLocation)
+     outputFileDetails.printf("\nStop Time = %d ms", stopTime)
+
+     outputFileDetails.printf("\n\n")
+
+     /* Printing header */
+     outputFile.printf("Population\tAxonDia\tNodeLen\tMyelinLen\tNumWraps\tWrapTh\tPasSF\tNaSF\tKSF\tPerturbation\tCurrent\tProxFR\tDistFR\tProxAPC\tDistAPC\tCV\tOutcomeFlag\n")
+
+    /* We have all results, now write them to file  -- TW */
+    for (id=0; id<popRes.size(); id=id+1) {
+        population = popRes.x[id]
+        perturbation = perturbRes.x[id]
+        injection = injRes.x[id]
+        meanFR = mfrRes.x[id]
+        meanFRDistal = mfrdRes.x[id]
+        apCount = apcRes.x[id]
+        apCountDistal = apcdRes.x[id]
+        condVel = cvRes.x[id]
+        outFlag = outflagRes.x[id]
+
+        outputFile.printf("\n%d\t", population) // For tabular outputFile - Nil
+
+        outputFileDetails.printf("\n\n************************************************************\n\n")
+        outputFileDetails.printf("-- Axon Morphologies --\n")
+        /* Printing the axon morphology parameters to output file */
+        for( morphologyCounter=0; morphologyCounter<noOfAxonMorphologyParameters; morphologyCounter=morphologyCounter+1) {
+            outputFileDetails.printf("\t%g\n", matrix_axonMorphologies.x[population][morphologyCounter])
+            outputFile.printf("%g\t", matrix_axonMorphologies.x[population][morphologyCounter]) // For tabular outputFile - Nil
+        }
+
+        /* Print results from func_evaluateFRandCV */
+        outputFileDetails.printf("\nPerturbation: %d \n", perturbation/2) // Since dystrophy file has 2 columns per perturbation scheme
+        outputFileDetails.printf("\nCurrent injection: %g nA\n", injection)
+        outputFileDetails.printf("Mean firing rate at proximal end: %g Hz\n", meanFR)
+        outputFileDetails.printf("Mean firing rate at distal end: %g Hz\n", meanFRDistal)
+        outputFileDetails.printf("AP count at proximal end: %d\n", apCount)
+        outputFileDetails.printf("AP count at distal end: %d\n", apCountDistal)
+        outputFileDetails.printf("Conduction velocity: %g m/s\n", condVel)
+        
+        outputFile.printf("%d\t%g\t%g\t%g\t%d\t%d\t%g\t%d", perturbation/2, injection, meanFR, meanFRDistal, apCount, apCountDistal, condVel, outFlag) // For tabular outputFile - Nil
+            
+        outputFileDetails.printf("\n************************************************************\n\n")
+        outputFile.printf("\n") // For tabular outputFile - Nil
+
+    }
+
+    /* Closing the files */
+	outputFile.close()
+    outputFileDetails.close()
+
+} // End of proc_runSimulation()
+
+
+
+
+/****************************************************************************************************************************************
+    Name: proc_printDetailsOnConsole()
+    Type: Procedure
+
+    Input Parameter(s): 1. Population Counter
+    Return Parameter: None
+
+    Description: Function to print details of a simulation/iteration on the console.
+
+    Edit History: Created by Nilapratim Sengupta in February 2022.  
+****************************************************************************************************************************************/
+proc proc_printDetailsOnConsole() {
+
+    /* Printing header */
+    a = printf("\n\n\nPrinting few simulation details for record keeping.")
+    a = printf("\n===================================================\n")
+    a = printf("\nPopulation Counter: %d", $1)
+
+
+    /* Printing parameters regarding axon morphologies from the LHS file */
+    a = printf("\n\nAxon Population Size = %d", axonPopulationSize)
+    a = printf("\nNo. of Axon Morphology Parameters = %d", noOfAxonMorphologyParameters)
+    a = printf("\nAxon Diameter = %f (in um)", axonDiameter)
+    a = printf("\nNode Length = %f (in um)", nodeLength)
+    a = printf("\nMyelin Sheath Length = %f (in um)", myelinSheathLength)
+    a = printf("\nNo. of Lamellae = %f", numOfLamellae)
+    a = printf("\nThickness of Lamellae = %f (in um)", lamellaThickness)
+
+
+    /* Printing parameters for the soma, dendrites and myelinated axon implementation */
+    a = printf("\n\nNo. of Compartments for Soma and Dendrites = %d", noOfComp)
+    a = printf("\nNo. of Nodes = %d", noOfNodes)
+    a = printf("\nNo. of ParanodeSets = %d", noOfParanodeSets) 
+    a = printf("\nNo. of Juxtaparanode Sets = %d", noOfJuxtaparanodeSets)
+    a = printf("\nNo of Internodes = %d", noOfInternodes)
+
+    /* Printing scale factors for biophysical parameters */
+    a = printf("\n\nScale factor for g_pas = %f", g_pas_scaleFactor)
+    a = printf("\nScale factor for gbar_naf = %f", gbar_naf_scaleFactor)
+    a = printf("\nScale factor for gbar_kdr = %f", gbar_kdr_scaleFactor)
+
+    /* Printing biophysical parameters */
+    a = printf("\n\nSoma:\t\tRa = %2f\t\tcm = %2f\tg_pas = %4f\tgbar_naf = %4f\tgbar_kdr = %4f", pyramidalCell.comp[1].Ra, pyramidalCell.comp[1].cm, pyramidalCell.comp[1].g_pas, pyramidalCell.comp[1].gbar_naf, pyramidalCell.comp[1].gbar_kdr)
+    a = printf("\nHill:\t\tRa = %2f\t\tcm = %2f\tg_pas = %4f\tgbar_naf = %4f\tgbar_kdr = %4f", pyramidalAxon.hill.Ra, pyramidalAxon.hill.cm, pyramidalAxon.hill.g_pas, pyramidalAxon.hill.gbar_naf, pyramidalAxon.hill.gbar_kdr)
+    a = printf("\nISeg:\t\tRa = %2f\t\tcm = %2f\tg_pas = %4f\tgbar_naf = %4f\tgbar_kdr = %4f", pyramidalAxon.iseg.Ra, pyramidalAxon.iseg.cm, pyramidalAxon.iseg.g_pas, pyramidalAxon.iseg.gbar_naf, pyramidalAxon.iseg.gbar_kdr)
+    a = printf("\nNodes:\t\tRa = %2f\t\tcm = %2f\tg_pas = %4f\tgbar_naf = %4f\tgbar_kdr = %4f", pyramidalAxon.nodes[0].Ra, pyramidalAxon.nodes[0].cm, pyramidalAxon.nodes[0].g_pas, pyramidalAxon.nodes[0].gbar_naf, pyramidalAxon.nodes[0].gbar_kdr)
+    a = printf("\nParanodeOnes:\tRa = %2f\t\tcm = %2f\tg_pas = %4f\tgbar_naf = %4f\tgbar_kdr = %4f", pyramidalAxon.paranodeOnes[0].Ra, pyramidalAxon.paranodeOnes[0].cm, pyramidalAxon.paranodeOnes[0].g_pas, pyramidalAxon.paranodeOnes[0].gbar_naf, pyramidalAxon.paranodeOnes[0].gbar_kdr)
+    a = printf("\nParanodeTwos:\tRa = %2f\t\tcm = %2f\tg_pas = %4f\tgbar_naf = %4f\tgbar_kdr = %4f", pyramidalAxon.paranodeTwos[0].Ra, pyramidalAxon.paranodeTwos[0].cm, pyramidalAxon.paranodeTwos[0].g_pas, pyramidalAxon.paranodeTwos[0].gbar_naf, pyramidalAxon.paranodeTwos[0].gbar_kdr)
+    a = printf("\nParanodeThrees:\tRa = %2f\t\tcm = %2f\tg_pas = %4f\tgbar_naf = %4f\tgbar_kdr = %4f", pyramidalAxon.paranodeThrees[0].Ra, pyramidalAxon.paranodeThrees[0].cm, pyramidalAxon.paranodeThrees[0].g_pas, pyramidalAxon.paranodeThrees[0].gbar_naf, pyramidalAxon.paranodeThrees[0].gbar_kdr)
+    a = printf("\nParanodeFours:\tRa = %2f\t\tcm = %2f\tg_pas = %4f\tgbar_naf = %4f\tgbar_kdr = %4f", pyramidalAxon.paranodeFours[0].Ra, pyramidalAxon.paranodeFours[0].cm, pyramidalAxon.paranodeFours[0].g_pas, pyramidalAxon.paranodeFours[0].gbar_naf, pyramidalAxon.paranodeFours[0].gbar_kdr)
+    a = printf("\nJuxtaparanodes:\tRa = %2f\t\tcm = %2f\tg_pas = %4f\tgbar_naf = %4f\tgbar_kdr = %4f", pyramidalAxon.juxtaparanodes[0].Ra, pyramidalAxon.juxtaparanodes[0].cm, pyramidalAxon.juxtaparanodes[0].g_pas, pyramidalAxon.juxtaparanodes[0].gbar_naf, pyramidalAxon.juxtaparanodes[0].gbar_kdr)
+    a = printf("\nInternodes:\tRa = %2f\t\tcm = %2f\tg_pas = %4f\tgbar_naf = %4f\tgbar_kdr = %4f", pyramidalAxon.internodes[0].Ra, pyramidalAxon.internodes[0].cm, pyramidalAxon.internodes[0].g_pas, pyramidalAxon.internodes[0].gbar_naf, pyramidalAxon.internodes[0].gbar_kdr)
+
+    /* Printing parameters for extracellular implementation */
+    a = printf("\n\nNodes:\txraxial[0] = %4f\txraxial[1] = %4f\txg[0] = %4f\txg[1] = %4f\txc[0] = %4f\txc[1] = %4f", pyramidalAxon.nodes[0].xraxial[0], pyramidalAxon.nodes[0].xraxial[1], pyramidalAxon.nodes[0].xg[0], pyramidalAxon.nodes[0].xg[1], pyramidalAxon.nodes[0].xc[0], pyramidalAxon.nodes[0].xc[1])
+    a = printf("\nParanodeOnes:\txraxial[0] = %4f\txraxial[1] = %4f\txg[0] = %4f\txg[1] = %4f\txc[0] = %4f\txc[1] = %4f", pyramidalAxon.paranodeOnes[0].xraxial[0], pyramidalAxon.paranodeOnes[0].xraxial[1], pyramidalAxon.paranodeOnes[0].xg[0], pyramidalAxon.paranodeOnes[0].xg[1], pyramidalAxon.paranodeOnes[0].xc[0], pyramidalAxon.paranodeOnes[0].xc[1])
+    a = printf("\nParanodeTwos:\txraxial[0] = %4f\txraxial[1] = %4f\txg[0] = %4f\txg[1] = %4f\txc[0] = %4f\txc[1] = %4f", pyramidalAxon.paranodeTwos[0].xraxial[0], pyramidalAxon.paranodeTwos[0].xraxial[1], pyramidalAxon.paranodeTwos[0].xg[0], pyramidalAxon.paranodeTwos[0].xg[1], pyramidalAxon.paranodeTwos[0].xc[0], pyramidalAxon.paranodeTwos[0].xc[1])
+    a = printf("\nParanodeThrees:\txraxial[0] = %4f\txraxial[1] = %4f\txg[0] = %4f\txg[1] = %4f\txc[0] = %4f\txc[1] = %4f", pyramidalAxon.paranodeThrees[0].xraxial[0], pyramidalAxon.paranodeThrees[0].xraxial[1], pyramidalAxon.paranodeThrees[0].xg[0], pyramidalAxon.paranodeThrees[0].xg[1], pyramidalAxon.paranodeThrees[0].xc[0], pyramidalAxon.paranodeThrees[0].xc[1])
+    a = printf("\nParanodeFours:\txraxial[0] = %4f\txraxial[1] = %4f\txg[0] = %4f\txg[1] = %4f\txc[0] = %4f\txc[1] = %4f", pyramidalAxon.paranodeFours[0].xraxial[0], pyramidalAxon.paranodeFours[0].xraxial[1], pyramidalAxon.paranodeFours[0].xg[0], pyramidalAxon.paranodeFours[0].xg[1], pyramidalAxon.paranodeFours[0].xc[0], pyramidalAxon.paranodeFours[0].xc[1])
+    a = printf("\nJuxtaparanodes:\txraxial[0] = %4f\txraxial[1] = %4f\txg[0] = %4f\txg[1] = %4f\txc[0] = %4f\txc[1] = %4f", pyramidalAxon.juxtaparanodes[0].xraxial[0], pyramidalAxon.juxtaparanodes[0].xraxial[1], pyramidalAxon.juxtaparanodes[0].xg[0], pyramidalAxon.juxtaparanodes[0].xg[1], pyramidalAxon.juxtaparanodes[0].xc[0], pyramidalAxon.juxtaparanodes[0].xc[1])
+    a = printf("\nInternodes:\txraxial[0] = %4f\txraxial[1] = %4f\txg[0] = %4f\txg[1] = %4f\txc[0] = %4f\txc[1] = %4f", pyramidalAxon.internodes[0].xraxial[0], pyramidalAxon.internodes[0].xraxial[1], pyramidalAxon.internodes[0].xg[0], pyramidalAxon.internodes[0].xg[1], pyramidalAxon.internodes[0].xc[0], pyramidalAxon.internodes[0].xc[1])
+
+    /* Printing parameters for recording */
+    a = printf("\n\nProximal Location Flag = %d (0: iseg; 1: otherwise)", proximalLocationFlag)
+    a = printf("\nProximal Location = %d", proximalLocation)
+    a = printf("\nDistal Location = %d", distalLocation)
+
+    a = printf("\n\n")
+
+} // End of proc_printDetailsOnConsole()
+
+
+
+
+/****************************************************************************************************************************************
+    Name: proc_printDetailsToFile()
+    Type: Procedure
+
+    Input Parameter(s): 1. Population Counter
+                        2. File Object
+    Return Parameter: None
+
+    Description: Function to print details of a simulation/iteration to a file.
+
+    Edit History: Created by Nilapratim Sengupta in February 2022.  
+****************************************************************************************************************************************/
+proc proc_printDetailsToFile() {
+
+    /* Printing header */
+    $o2.printf("\n\n\nPrinting few simulation details for record keeping.")
+    $o2.printf("\n===================================================\n")
+    $o2.printf("\nPopulation Counter: %d", $1)
+
+
+    /* Printing parameters regarding axon morphologies from the LHS file */
+    $o2.printf("\n\nAxon Population Size = %d", axonPopulationSize)
+    $o2.printf("\nNo. of Axon Morphology Parameters = %d", noOfAxonMorphologyParameters)
+    $o2.printf("\nAxon Diameter = %f (in um)", axonDiameter)
+    $o2.printf("\nNode Length = %f (in um)", nodeLength)
+    $o2.printf("\nMyelin Sheath Length = %f (in um)", myelinSheathLength)
+    $o2.printf("\nNo. of Lamellae = %f", numOfLamellae)
+    $o2.printf("\nThickness of Lamellae = %f (in um)", lamellaThickness)
+
+
+    /* Printing parameters for the soma, dendrites and myelinated axon implementation */
+    $o2.printf("\n\nNo. of Compartments for Soma and Dendrites = %d", noOfComp)
+    $o2.printf("\nNo. of Nodes = %d", noOfNodes)
+    $o2.printf("\nNo. of ParanodeSets = %d", noOfParanodeSets) 
+    $o2.printf("\nNo. of Juxtaparanode Sets = %d", noOfJuxtaparanodeSets)
+    $o2.printf("\nNo of Internodes = %d", noOfInternodes)
+
+    /* Printing scale factors for biophysical parameters */
+    $o2.printf("\n\nScale factor for g_pas = %f", g_pas_scaleFactor)
+    $o2.printf("\nScale factor for gbar_naf = %f", gbar_naf_scaleFactor)
+    $o2.printf("\nScale factor for gbar_kdr = %f", gbar_kdr_scaleFactor)
+
+    /* Printing biophysical parameters */
+    $o2.printf("\n\nSoma:\t\tRa = %2f\t\tcm = %2f\tg_pas = %4f\tgbar_naf = %4f\tgbar_kdr = %4f", pyramidalCell.comp[1].Ra, pyramidalCell.comp[1].cm, pyramidalCell.comp[1].g_pas, pyramidalCell.comp[1].gbar_naf, pyramidalCell.comp[1].gbar_kdr)
+    $o2.printf("\nHill:\t\tRa = %2f\t\tcm = %2f\tg_pas = %4f\tgbar_naf = %4f\tgbar_kdr = %4f", pyramidalAxon.hill.Ra, pyramidalAxon.hill.cm, pyramidalAxon.hill.g_pas, pyramidalAxon.hill.gbar_naf, pyramidalAxon.hill.gbar_kdr)
+    $o2.printf("\nISeg:\t\tRa = %2f\t\tcm = %2f\tg_pas = %4f\tgbar_naf = %4f\tgbar_kdr = %4f", pyramidalAxon.iseg.Ra, pyramidalAxon.iseg.cm, pyramidalAxon.iseg.g_pas, pyramidalAxon.iseg.gbar_naf, pyramidalAxon.iseg.gbar_kdr)
+    $o2.printf("\nNodes:\t\tRa = %2f\t\tcm = %2f\tg_pas = %4f\tgbar_naf = %4f\tgbar_kdr = %4f", pyramidalAxon.nodes[0].Ra, pyramidalAxon.nodes[0].cm, pyramidalAxon.nodes[0].g_pas, pyramidalAxon.nodes[0].gbar_naf, pyramidalAxon.nodes[0].gbar_kdr)
+    $o2.printf("\nParanodeOnes:\tRa = %2f\t\tcm = %2f\tg_pas = %4f\tgbar_naf = %4f\tgbar_kdr = %4f", pyramidalAxon.paranodeOnes[0].Ra, pyramidalAxon.paranodeOnes[0].cm, pyramidalAxon.paranodeOnes[0].g_pas, pyramidalAxon.paranodeOnes[0].gbar_naf, pyramidalAxon.paranodeOnes[0].gbar_kdr)
+    $o2.printf("\nParanodeTwos:\tRa = %2f\t\tcm = %2f\tg_pas = %4f\tgbar_naf = %4f\tgbar_kdr = %4f", pyramidalAxon.paranodeTwos[0].Ra, pyramidalAxon.paranodeTwos[0].cm, pyramidalAxon.paranodeTwos[0].g_pas, pyramidalAxon.paranodeTwos[0].gbar_naf, pyramidalAxon.paranodeTwos[0].gbar_kdr)
+    $o2.printf("\nParanodeThrees:\tRa = %2f\t\tcm = %2f\tg_pas = %4f\tgbar_naf = %4f\tgbar_kdr = %4f", pyramidalAxon.paranodeThrees[0].Ra, pyramidalAxon.paranodeThrees[0].cm, pyramidalAxon.paranodeThrees[0].g_pas, pyramidalAxon.paranodeThrees[0].gbar_naf, pyramidalAxon.paranodeThrees[0].gbar_kdr)
+    $o2.printf("\nParanodeFours:\tRa = %2f\t\tcm = %2f\tg_pas = %4f\tgbar_naf = %4f\tgbar_kdr = %4f", pyramidalAxon.paranodeFours[0].Ra, pyramidalAxon.paranodeFours[0].cm, pyramidalAxon.paranodeFours[0].g_pas, pyramidalAxon.paranodeFours[0].gbar_naf, pyramidalAxon.paranodeFours[0].gbar_kdr)
+    $o2.printf("\nJuxtaparanodes:\tRa = %2f\t\tcm = %2f\tg_pas = %4f\tgbar_naf = %4f\tgbar_kdr = %4f", pyramidalAxon.juxtaparanodes[0].Ra, pyramidalAxon.juxtaparanodes[0].cm, pyramidalAxon.juxtaparanodes[0].g_pas, pyramidalAxon.juxtaparanodes[0].gbar_naf, pyramidalAxon.juxtaparanodes[0].gbar_kdr)
+    $o2.printf("\nInternodes:\tRa = %2f\t\tcm = %2f\tg_pas = %4f\tgbar_naf = %4f\tgbar_kdr = %4f", pyramidalAxon.internodes[0].Ra, pyramidalAxon.internodes[0].cm, pyramidalAxon.internodes[0].g_pas, pyramidalAxon.internodes[0].gbar_naf, pyramidalAxon.internodes[0].gbar_kdr)
+
+    /* Printing parameters for extracellular implementation */
+    $o2.printf("\n\nNodes:\txraxial[0] = %4f\txraxial[1] = %4f\txg[0] = %4f\txg[1] = %4f\txc[0] = %4f\txc[1] = %4f", pyramidalAxon.nodes[0].xraxial[0], pyramidalAxon.nodes[0].xraxial[1], pyramidalAxon.nodes[0].xg[0], pyramidalAxon.nodes[0].xg[1], pyramidalAxon.nodes[0].xc[0], pyramidalAxon.nodes[0].xc[1])
+    $o2.printf("\nParanodeOnes:\txraxial[0] = %4f\txraxial[1] = %4f\txg[0] = %4f\txg[1] = %4f\txc[0] = %4f\txc[1] = %4f", pyramidalAxon.paranodeOnes[0].xraxial[0], pyramidalAxon.paranodeOnes[0].xraxial[1], pyramidalAxon.paranodeOnes[0].xg[0], pyramidalAxon.paranodeOnes[0].xg[1], pyramidalAxon.paranodeOnes[0].xc[0], pyramidalAxon.paranodeOnes[0].xc[1])
+    $o2.printf("\nParanodeTwos:\txraxial[0] = %4f\txraxial[1] = %4f\txg[0] = %4f\txg[1] = %4f\txc[0] = %4f\txc[1] = %4f", pyramidalAxon.paranodeTwos[0].xraxial[0], pyramidalAxon.paranodeTwos[0].xraxial[1], pyramidalAxon.paranodeTwos[0].xg[0], pyramidalAxon.paranodeTwos[0].xg[1], pyramidalAxon.paranodeTwos[0].xc[0], pyramidalAxon.paranodeTwos[0].xc[1])
+    $o2.printf("\nParanodeThrees:\txraxial[0] = %4f\txraxial[1] = %4f\txg[0] = %4f\txg[1] = %4f\txc[0] = %4f\txc[1] = %4f", pyramidalAxon.paranodeThrees[0].xraxial[0], pyramidalAxon.paranodeThrees[0].xraxial[1], pyramidalAxon.paranodeThrees[0].xg[0], pyramidalAxon.paranodeThrees[0].xg[1], pyramidalAxon.paranodeThrees[0].xc[0], pyramidalAxon.paranodeThrees[0].xc[1])
+    $o2.printf("\nParanodeFours:\txraxial[0] = %4f\txraxial[1] = %4f\txg[0] = %4f\txg[1] = %4f\txc[0] = %4f\txc[1] = %4f", pyramidalAxon.paranodeFours[0].xraxial[0], pyramidalAxon.paranodeFours[0].xraxial[1], pyramidalAxon.paranodeFours[0].xg[0], pyramidalAxon.paranodeFours[0].xg[1], pyramidalAxon.paranodeFours[0].xc[0], pyramidalAxon.paranodeFours[0].xc[1])
+    $o2.printf("\nJuxtaparanodes:\txraxial[0] = %4f\txraxial[1] = %4f\txg[0] = %4f\txg[1] = %4f\txc[0] = %4f\txc[1] = %4f", pyramidalAxon.juxtaparanodes[0].xraxial[0], pyramidalAxon.juxtaparanodes[0].xraxial[1], pyramidalAxon.juxtaparanodes[0].xg[0], pyramidalAxon.juxtaparanodes[0].xg[1], pyramidalAxon.juxtaparanodes[0].xc[0], pyramidalAxon.juxtaparanodes[0].xc[1])
+    $o2.printf("\nInternodes:\txraxial[0] = %4f\txraxial[1] = %4f\txg[0] = %4f\txg[1] = %4f\txc[0] = %4f\txc[1] = %4f", pyramidalAxon.internodes[0].xraxial[0], pyramidalAxon.internodes[0].xraxial[1], pyramidalAxon.internodes[0].xg[0], pyramidalAxon.internodes[0].xg[1], pyramidalAxon.internodes[0].xc[0], pyramidalAxon.internodes[0].xc[1])
+
+    /* Printing parameters for recording */
+    $o2.printf("\n\nProximal Location Flag = %d (0: iseg; 1: otherwise)", proximalLocationFlag)
+    $o2.printf("\nProximal Location = %d", proximalLocation)
+    $o2.printf("\nDistal Location = %d", distalLocation)
+
+    $o2.printf("\n\n")
+
+} // End of proc_printDetailsToFile()
+
+

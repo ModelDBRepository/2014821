@@ -1,0 +1,83 @@
+/*******************************************************************************************************************************************
+
+    Description: File to set up custom initialization.
+                 Holding current is injected to ensure stable membrane potential before actual stimulus is provided.
+                 Current stimulus delay is 15s (in accordance with Luebke protocol).
+
+    Edit History: Modified by Christina Weaver in May 2020.
+                  Modified by Nilapratim Sengupta in December 2021.
+                  Modified by Nilapratim Sengupta in June 2023 to remove commented print statements and append display statement for user.
+
+*******************************************************************************************************************************************/
+
+/* Loading file that defines the point process */
+load_file("vSource.ses") // creates Vsource[0]
+
+
+/* Defining proc init() that gets invoked before run() */
+proc init() { local dtSave, tstopSave, temp
+
+  currentStimulus.del = 1e9
+  holdingCurrent = 0
+  holdingStimulus.amp = holdingCurrent
+
+  /* Invoking finitialize() */
+  finitialize(v_init)
+
+  /* Saving dt and tstop for actual simulation duration */
+  dtSave = dt
+  tstopSave = tstop
+
+  /* Setting 't' for holding phase and enabling variable time-step computation for this phase */
+  t = -5000
+  tstop = t+initialDuration
+  temp = cvode.active()
+  if (temp!=0) { cvode.active(0) }
+
+  /* Configuring the point process */
+  Vsource[0].rs = 0.01
+  Vsource[0].toff = 0   // Should prevent it from delivering nonzero current when t>0.
+  Vsource[0].amp = initialPotential
+
+  /* First while-loop */
+  a = printf("\nInitialization Stage I in progress...\n")
+  while (t<tstop) {
+    fadvance()
+  }
+
+  /* Re-configuring the point process */
+  holdingCurrent = Vsource[0].i
+  holdingStimulus.amp = holdingCurrent
+  Vsource[0].rs = 1e9 // To ensure the current it delivers during a run is miniscule. This is a "suspenders & belt" approach because Vsource[0].toff = 0
+
+  /* Restoring dt and enabling holding phase for some more time using fixed time-step protocol */
+  dt = dtSave
+  tstop = 0
+  t = -500
+
+  /* Second while-loop */
+  a = printf("\nInitialization Stage II in progress...This may take a while!\n")
+  while (t<tstop) {
+    fadvance()
+  }
+
+  /* Restoring t, tstop for actual simulation */
+  t = 0
+  tstop = tstopSave 
+
+  /* In accordance with Jennifer Luebke's electrophysiology protocol */
+  currentStimulus.del = 15
+
+  /* Restore and re-init cvode if necessary */
+  if (temp!=0) {
+    cvode.active(1)
+    cvode.re_init()
+  } else {
+    fcurrent()
+  }
+  frecord_init()
+
+  a = printf("\nSimulation begins...\n")
+} // End of init()
+
+

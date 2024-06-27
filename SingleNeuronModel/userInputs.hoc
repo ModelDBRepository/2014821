@@ -1,0 +1,101 @@
+/****************************************************************************************************************************************
+
+    Description: File listing procedures to handle user inputs.
+
+    Edit History: Created by Nilapratim Sengupta in June 2023 for user-friendly ModelDB entry.
+
+****************************************************************************************************************************************/
+
+
+
+/****************************************************************************************************************************************
+    Name: proc_userSetMorphologyFile()
+    Type: Procedure
+
+    Input Parameter(s): 1. Option (Integer)
+    Return Parameter: None
+
+    Description: Procedure to select axon model file based on user-input through GUI.
+                 
+    Edit History: Created by Nilapratim Sengupta in June 2023 for user-friendly ModelDB entry.
+****************************************************************************************************************************************/
+proc proc_userSetMorphologyFile() { local choice
+
+    /* Receiving the argument */
+	choice = $1
+
+    /* Updating variable based on user-input */
+	if (choice == 1) {
+		inputFileNameMorphologies = inputFileNameMorphologiesOne
+        a = printf("\nModel Selection: Pyramidal cell with less susceptible axon selected!\n")
+	} else {
+		inputFileNameMorphologies = inputFileNameMorphologiesTwo
+        a = printf("\nModel Selection: Pyramidal cell with more susceptible axon selected!\n")
+	}
+
+} // End of proc_userSetMorphologyFile()
+
+
+
+
+/****************************************************************************************************************************************
+    Name: proc_userSetPerturbationFile()
+    Type: Procedure
+
+    Input Parameter(s): 1. Option (Integer)
+    Return Parameter: None
+
+    Description: Procedure to select axon perturbation file based on user-input through GUI.
+                 
+    Edit History: Created by Nilapratim Sengupta in June 2023 for user-friendly ModelDB entry.
+****************************************************************************************************************************************/
+proc proc_userSetPerturbationFile() { local choice
+
+    /* Receiving the argument */
+	choice = $1
+
+    /* Updating variable based on user-input */
+	if (choice == 1) {
+		inputFileNamePerturbations = inputFileNamePerturbationsNormal
+        a = printf("\nPerturbation Selection: No perturbation\n")
+	} else {
+        if (choice == 2) {
+		    inputFileNamePerturbations = inputFileNamePerturbationsDem50
+            a = printf("\nPerturbation Selection: 50%% Demyelination - 100%% lamellae lost\n")
+	    } else {
+            inputFileNamePerturbations = inputFileNamePerturbationsRem50
+            a = printf("\nPerturbation Selection: 100%% Remyelination - 75%% lamellae added\n")
+        }
+    }
+
+} // End of proc_userSetPerturbationFile()
+
+
+
+
+/****************************************************************************************************************************************
+    Name: proc_userSetSimTime()
+    Type: Procedure
+
+    Input Parameter(s): 1. Option (Integer)
+    Return Parameter: None
+
+    Description: Procedure to select simulation time based on user-input through GUI.
+                 
+    Edit History: Created by Nilapratim Sengupta in June 2023 for user-friendly ModelDB entry.
+****************************************************************************************************************************************/
+proc proc_userSetSimTime() { local choice
+
+    /* Receiving the argument */
+	choice = $1
+
+    /* Updating variable based on user-input */
+	if (choice == 1) {
+		stopTime = 215
+        a = printf("\nProtocol Selection: 200 ms Test Run\n")
+	} else {
+		stopTime = 2015
+        a = printf("\nProtocol Selection: 2000 ms Protocol\n")
+	}
+
+} // End of proc_userSetSimTime()

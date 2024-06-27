@@ -1,0 +1,1799 @@
+/****************************************************************************************************************************************
+
+    Description: File listing setup procedures and functions.
+
+    Edit History: Created by Nilapratim Sengupta in December 2021.
+                  Modified by Nilapratim Sengupta in March 2022.
+                  Modified by Nilapratim Sengupta in May 2022.
+                  Modified by Nilapratim Sengupta in June 2022.
+                 
+****************************************************************************************************************************************/
+
+/* Declaring object references - as they cannot be declared within procedures or functions */
+objref holdingStimulus, currentStimulus, axonFile, matrix_axonMorphologies, perturbationFile, matrix_axonPerturbations, internodeType, vector_axonPerturbationsInternodes, vector_axonPerturbationsLamellae
+
+
+/****************************************************************************************************************************************
+    Name: proc_calculateAxonParameters()
+    Type: Procedure
+
+    Input Parameter(s): 1. Diameter of the axon (um)
+		                2. Length of each node um)
+		                3. Lenth of each myelin sheath (um)
+		                4. Number of myelin wraps over each internode
+		                5. Thickness of each myelin wrap (um)
+		                6. gRatio (For the Gow-Devaux Method)
+    Return Parameter: None
+
+    Description: Procedure to calculate values of parameters for myelinated axon implementation using extracellular mechanism.
+                 This procedure is based on calculations listed in an Excel sheet, prepared by Gow-Devaux.
+
+    Edit History: Created by Nilapratim Sengupta in December 2021.           
+****************************************************************************************************************************************/
+proc proc_calculateAxonParameters() {
+
+    /* Inputs to the Procedure */
+    axonDiameter = $1
+    nodeLength = $2
+    myelinSheathLength = $3 // Includes internode, juxtaparanodes and paranodes
+    numOfLamellae = $4
+    lamellaThickness = $5 // Thickness of each layer of myelin
+    gRatio = $6 // Gow-Devaux Method
+
+    /* Fiber Diameter and g-Ratio */
+    totalFiberDiameter = (axonDiameter + (2 * numOfLamellae * lamellaThickness)) // Should internodeDelta be included?
+    gRatio = (axonDiameter / totalFiberDiameter)
+    //gRatio = $6 // Gow-Devaux Method
+
+    /* Lengths - Total and Compartmental */
+    numOfParanodeCompartments = 8 // 4 compartments on either side of the myelinated segment
+    compartmentalParanodeLength = (3.94 * (axonDiameter / 4))
+    totalParanodeLength = (numOfParanodeCompartments * compartmentalParanodeLength)
+
+    numOfJuxtaparanodeCompartments = 2 // 1 compartment on either side of the internode
+    numOfInternodeCompartments = 5
+    compartmentalJuxtaparanodeLength = ((myelinSheathLength - totalParanodeLength) / (numOfJuxtaparanodeCompartments + numOfInternodeCompartments))
+    compartmentalInternodeLength = compartmentalJuxtaparanodeLength
+    totalInternodeLength = (numOfInternodeCompartments * compartmentalInternodeLength)
+
+    /* Peri-axonal Spaces */
+    paranodeDelta = 0.002
+    internodeDelta = 0.02
+
+    /* Myelin Period */
+    myelinPeriod = 0.016
+
+    /* Capacitances */
+    axonCapacitance = 1 //(uF/cm^2)
+    myelinCapacitance = 0.5 //(uF/cm^2)
+
+    /* Resistivities */
+    axoplasmResistivity = 150//70 //(ohm.cm)
+    periaxonResistivity = 150//70 //(ohm.cm)
+    myelinResistivity = 300 //(ohm.cm)
+    tightjunctionResistivity = 600 //(ohm.cm^2)
+
+    /* Cross-sectional Areas - Row 2 of Excel Sheet */
+    crosssectionArea_node = (PI * (axonDiameter / 2)^2) //(* 10^-8 cm^2)
+    crosssectionArea_paranodeOne = (PI * (axonDiameter / 2)^2) //(* 10^-8 cm^2)
+    crosssectionArea_paranodeTwo = (PI * (axonDiameter / 2)^2) //(* 10^-8 cm^2)
+    crosssectionArea_paranodeThree = (PI * (axonDiameter / 2)^2) //(* 10^-8 cm^2)
+    crosssectionArea_paranodeFour = (PI * (axonDiameter / 2)^2) //(* 10^-8 cm^2)
+    crosssectionArea_juxtaparanode = (PI * (axonDiameter / 2)^2) //(* 10^-8 cm^2)
+    crosssectionArea_internode = (PI * (axonDiameter / 2)^2) //(* 10^-8 cm^2)
+
+    /* Peri-axonal Annular Areas - Row 3 of Excel Sheet */
+    periaxonAnnularArea_node = ((PI * ((axonDiameter / 2) + paranodeDelta)^2) - crosssectionArea_node) //(* 10^-8 cm^2)
+    periaxonAnnularArea_paranodeOne = ((PI * ((axonDiameter / 2) + paranodeDelta)^2) - crosssectionArea_paranodeOne) //(* 10^-8 cm^2)
+    periaxonAnnularArea_paranodeTwo = ((PI * ((axonDiameter / 2) + paranodeDelta)^2) - crosssectionArea_paranodeTwo) //(* 10^-8 cm^2)
+    periaxonAnnularArea_paranodeThree = ((PI * ((axonDiameter / 2) + paranodeDelta)^2) - crosssectionArea_paranodeThree) //(* 10^-8 cm^2)   
+    periaxonAnnularArea_paranodeFour = ((PI * ((axonDiameter / 2) + paranodeDelta)^2) - crosssectionArea_paranodeFour) //(* 10^-8 cm^2)
+    periaxonAnnularArea_juxtaparanode = ((PI * ((axonDiameter / 2) + internodeDelta)^2) - crosssectionArea_juxtaparanode) //(* 10^-8 cm^2)
+    periaxonAnnularArea_internode = ((PI * ((axonDiameter / 2) + internodeDelta)^2) - crosssectionArea_internode) //(* 10^-8 cm^2)
+
+    /* Surface Areas - Row 4 of Excel Sheet */
+    axonSurfaceArea_node = (PI * axonDiameter * nodeLength) //(* 10^-8 cm^2)
+    axonSurfaceArea_paranodeOne = (PI * axonDiameter * compartmentalParanodeLength) //(* 10^-8 cm^2) 
+    axonSurfaceArea_paranodeTwo = (PI * axonDiameter * compartmentalParanodeLength) //(* 10^-8 cm^2)
+    axonSurfaceArea_paranodeThree = (PI * axonDiameter * compartmentalParanodeLength) //(* 10^-8 cm^2)
+    axonSurfaceArea_paranodeFour = (PI * axonDiameter * compartmentalParanodeLength) //(* 10^-8 cm^2)
+    axonSurfaceArea_juxtaparanode = (PI * axonDiameter * compartmentalJuxtaparanodeLength) //(* 10^-8 cm^2)
+    axonSurfaceArea_internode_compartmental = (PI * axonDiameter * compartmentalInternodeLength) //(* 10^-8 cm^2)
+    axonSurfaceArea_internode = (PI * axonDiameter * totalInternodeLength) //(* 10^-8 cm^2)
+
+    /* Myelin Thicknesses - Row 7 of Excel Sheet */
+    myelinThickness_internode = (numOfLamellae * lamellaThickness) //(um)
+    //myelinThickness_internode = ((axonDiameter / 2 / gRatio) - (axonDiameter / 2) - internodeDelta) //(um) // Gow-Devaux Method
+    myelinThickness_juxtaparanode = myelinThickness_internode //(um)
+    myelinThickness_paranodeFour = (0.8 * myelinThickness_internode) //(um)
+    myelinThickness_paranodeThree = (0.6 * myelinThickness_internode) //(um)
+    myelinThickness_paranodeTwo = (0.4 * myelinThickness_internode) //(um)
+    myelinThickness_paranodeOne = (0.2 * myelinThickness_internode) //(um)
+
+    /* Myelin Wraps - Row 6 of Excel Sheet */
+    myelinWraps_internode = numOfLamellae
+    //myelinWraps_internode = (myelinThickness_internode / myelinPeriod) // Gow-Devaux Method
+    myelinWraps_juxtaparanode = myelinWraps_internode
+    myelinWraps_paranodeFour = (0.8 * myelinWraps_internode)
+    myelinWraps_paranodeThree = (0.6 * myelinWraps_internode)
+    myelinWraps_paranodeTwo = (0.4 * myelinWraps_internode)
+    myelinWraps_paranodeOne = (0.2 * myelinWraps_internode)
+
+    /* Myelin Surface Areas - Row 5 of Excel Sheet */
+    myelinSurfaceArea_paranodeOne = (PI * compartmentalParanodeLength * (axonDiameter + (2 * paranodeDelta) + (2 * myelinThickness_paranodeOne))) //(* 10^-8 cm^2) // Formula modified: myelinThickness considered twice (unlike Gow-Devaux Method)
+    myelinSurfaceArea_paranodeTwo = (PI * compartmentalParanodeLength * (axonDiameter + (2 * paranodeDelta) + (2 * myelinThickness_paranodeTwo))) //(* 10^-8 cm^2) // Formula modified: myelinThickness considered twice (unlike Gow-Devaux Method)
+    myelinSurfaceArea_paranodeThree = (PI * compartmentalParanodeLength * (axonDiameter + (2 * paranodeDelta) + (2 * myelinThickness_paranodeThree))) //(* 10^-8 cm^2) // Formula modified: myelinThickness considered twice (unlike Gow-Devaux Method)
+    myelinSurfaceArea_paranodeFour = (PI * compartmentalParanodeLength * (axonDiameter + (2 * paranodeDelta) + (2 * myelinThickness_paranodeFour))) //(* 10^-8 cm^2) // Formula modified: myelinThickness considered twice (unlike Gow-Devaux Method)
+    myelinSurfaceArea_juxtaparanode = (PI * compartmentalJuxtaparanodeLength * (axonDiameter + (2 * internodeDelta) + (2 * myelinThickness_juxtaparanode))) //(* 10^-8 cm^2) // Formula modified: myelinThickness considered twice (unlike Gow-Devaux Method)
+    myelinSurfaceArea_internode_compartmental = (PI * compartmentalInternodeLength * (axonDiameter + (2 * internodeDelta) + (2 * myelinThickness_internode))) //(* 10^-8 cm^2) // Formula modified: myelinThickness considered twice (unlike Gow-Devaux Method)
+    myelinSurfaceArea_internode = (PI * totalInternodeLength * (axonDiameter + (2 * internodeDelta) + (2 * myelinThickness_internode))) //(* 10^-8 cm^2) // Formula modified: myelinThickness considered twice (unlike Gow-Devaux Method)
+
+    /* Axoplasmic Resistances - Row 8 of Excel Sheet */
+    axoplasmResistance_node = (axoplasmResistivity * nodeLength / crosssectionArea_node) //(10^4 ohm)
+    axoplasmResistance_paranodeOne = (axoplasmResistivity * compartmentalParanodeLength / crosssectionArea_paranodeOne) //(10^4 ohm)
+    axoplasmResistance_paranodeTwo = (axoplasmResistivity * compartmentalParanodeLength / crosssectionArea_paranodeTwo) //(10^4 ohm)
+    axoplasmResistance_paranodeThree = (axoplasmResistivity * compartmentalParanodeLength / crosssectionArea_paranodeThree) //(10^4 ohm)
+    axoplasmResistance_paranodeFour = (axoplasmResistivity * compartmentalParanodeLength / crosssectionArea_paranodeFour) //(10^4 ohm)
+    axoplasmResistance_juxtaparanode = (axoplasmResistivity * compartmentalJuxtaparanodeLength / crosssectionArea_juxtaparanode) //(10^4 ohm)
+    axoplasmResistance_internode_compartmental = (axoplasmResistivity * compartmentalInternodeLength / crosssectionArea_internode) //(10^4 ohm)
+    axoplasmResistance_internode = (axoplasmResistivity * totalInternodeLength / crosssectionArea_internode) //(10^4 ohm)
+
+    /* Peri-axonal Resistances - Row 9 of Excel Sheet */
+    periaxonResistance_paranodeOne = (periaxonResistivity * compartmentalParanodeLength / periaxonAnnularArea_paranodeOne) //(10^4 ohm)
+    periaxonResistance_paranodeTwo = (periaxonResistivity * compartmentalParanodeLength / periaxonAnnularArea_paranodeTwo) //(10^4 ohm)
+    periaxonResistance_paranodeThree = (periaxonResistivity * compartmentalParanodeLength / periaxonAnnularArea_paranodeThree) //(10^4 ohm)
+    periaxonResistance_paranodeFour = (periaxonResistivity * compartmentalParanodeLength / periaxonAnnularArea_paranodeFour) //(10^4 ohm)
+    periaxonResistance_juxtaparanode = (periaxonResistivity * compartmentalJuxtaparanodeLength / periaxonAnnularArea_juxtaparanode) //(10^4 ohm)
+    periaxonResistance_internode_compartmental = (periaxonResistivity * compartmentalInternodeLength / periaxonAnnularArea_internode) //(10^4 ohm)
+    periaxonResistance_internode = (periaxonResistivity * totalInternodeLength / periaxonAnnularArea_internode) //(10^4 ohm)
+
+    /* Axonal Capacitances - Row 10 of Excel Sheet */
+    axonCapacitance_node = (axonCapacitance * axonSurfaceArea_node) //(10^-8 uF) 
+    axonCapacitance_paranodeOne = (axonCapacitance * axonSurfaceArea_paranodeOne) //(10^-8 uF) 
+    axonCapacitance_paranodeTwo = (axonCapacitance * axonSurfaceArea_paranodeTwo) //(10^-8 uF) 
+    axonCapacitance_paranodeThree = (axonCapacitance * axonSurfaceArea_paranodeThree) //(10^-8 uF) 
+    axonCapacitance_paranodeFour = (axonCapacitance * axonSurfaceArea_paranodeFour) //(10^-8 uF) 
+    axonCapacitance_juxtaparanode = (axonCapacitance * axonSurfaceArea_juxtaparanode) //(10^-8 uF) 
+    axonCapacitance_internode_compartmental = (axonCapacitance * axonSurfaceArea_internode_compartmental) //(10^-8 uF) 
+    axonCapacitance_internode = (axonCapacitance * axonSurfaceArea_internode) //(10^-8 uF) 
+
+    /* Myelin Capacitances - Row 11 of Excel Sheet */
+    myelinCapacitance_paranodeOne = (myelinCapacitance * myelinSurfaceArea_paranodeOne / myelinWraps_paranodeOne) //(10^-8 uF)
+    myelinCapacitance_paranodeTwo = (myelinCapacitance * myelinSurfaceArea_paranodeTwo / myelinWraps_paranodeTwo) //(10^-8 uF)
+    myelinCapacitance_paranodeThree = (myelinCapacitance * myelinSurfaceArea_paranodeThree / myelinWraps_paranodeThree) //(10^-8 uF)
+    myelinCapacitance_paranodeFour = (myelinCapacitance * myelinSurfaceArea_paranodeFour / myelinWraps_paranodeFour) //(10^-8 uF)
+    myelinCapacitance_juxtaparanode = (myelinCapacitance * myelinSurfaceArea_juxtaparanode / myelinWraps_juxtaparanode) //(10^-8 uF)
+    myelinCapacitance_internode_compartmental = (myelinCapacitance * myelinSurfaceArea_internode_compartmental / myelinWraps_internode) //(10^-8 uF)
+    myelinCapacitance_internode = (myelinCapacitance * myelinSurfaceArea_internode / myelinWraps_internode) //(10^-8 uF)
+
+    /* Myelin Resistances - Row 12 of Excel Sheet */
+    myelinResistance_paranodeOne = (myelinResistivity * myelinWraps_paranodeOne / myelinSurfaceArea_paranodeOne) //(10^8 ohm) // Unit checking required
+    myelinResistance_paranodeTwo = (myelinResistivity * myelinWraps_paranodeTwo / myelinSurfaceArea_paranodeTwo) //(10^8 ohm) // Unit checking required
+    myelinResistance_paranodeThree = (myelinResistivity * myelinWraps_paranodeThree / myelinSurfaceArea_paranodeThree) //(10^8 ohm) // Unit checking required
+    myelinResistance_paranodeFour = (myelinResistivity * myelinWraps_paranodeFour / myelinSurfaceArea_paranodeFour) //(10^8 ohm) // Unit checking required
+    myelinResistance_juxtaparanode = (myelinResistivity * myelinWraps_juxtaparanode / myelinSurfaceArea_juxtaparanode) //(10^8 ohm) // Unit checking required
+    myelinResistance_internode_compartmental = (myelinResistivity * myelinWraps_internode / myelinSurfaceArea_internode_compartmental) //(10^8 ohm) // Unit checking required 
+    myelinResistance_internode = (myelinResistivity * myelinWraps_internode / myelinSurfaceArea_internode) //(10^8 ohm) // Unit checking required
+
+    /* Tight Junctional Resistances - Row 13 of Excel Sheet */
+    tightjunctionResistance_paranodeOne = (tightjunctionResistivity / (PI * (axonDiameter + (2 * paranodeDelta)) * compartmentalParanodeLength)) //(10^8 ohm)
+    tightjunctionResistance_paranodeTwo = (tightjunctionResistivity / (PI * (axonDiameter + (2 * paranodeDelta)) * compartmentalParanodeLength)) //(10^8 ohm)
+    tightjunctionResistance_paranodeThree = (tightjunctionResistivity / (PI * (axonDiameter + (2 * paranodeDelta)) * compartmentalParanodeLength)) //(10^8 ohm)
+    tightjunctionResistance_paranodeFour = (tightjunctionResistivity / (PI * (axonDiameter + (2 * paranodeDelta)) * compartmentalParanodeLength)) //(10^8 ohm)
+    tightjunctionResistance_juxtaparanode = (tightjunctionResistivity / (PI * (axonDiameter + (2 * internodeDelta)) * compartmentalJuxtaparanodeLength)) //(10^8 ohm)
+    tightjunctionResistance_internode_compartmental = (tightjunctionResistivity / (PI * (axonDiameter + (2 * internodeDelta)) * compartmentalInternodeLength)) //(10^8 ohm)
+    tightjunctionResistance_internode = (tightjunctionResistivity / (PI * (axonDiameter + (2 * internodeDelta)) * totalInternodeLength)) //(10^8 ohm)
+
+    /* xraxial[0] for NEURON - Row 14 of Excel Sheet */
+    xraxial0_node = (periaxonResistivity / (periaxonAnnularArea_node *0.00000001) * 0.000001) //(Mohm/cm)
+    xraxial0_paranodeOne = (2 * (periaxonResistivity / (periaxonAnnularArea_paranodeOne * 0.00000001) * 0.000001)) //(Mohm/cm)
+    xraxial0_paranodeTwo = (2 * (periaxonResistivity / (periaxonAnnularArea_paranodeTwo * 0.00000001) * 0.000001)) //(Mohm/cm)
+    xraxial0_paranodeThree = (2 * (periaxonResistivity / (periaxonAnnularArea_paranodeThree * 0.00000001) * 0.000001)) //(Mohm/cm)
+    xraxial0_paranodeFour = (2 * (periaxonResistivity / (periaxonAnnularArea_paranodeFour * 0.00000001) * 0.000001)) //(Mohm/cm)
+    xraxial0_juxtaparanode = (periaxonResistivity / (periaxonAnnularArea_juxtaparanode * 0.00000001) * 0.000001) //(Mohm/cm)
+    xraxial0_internode = (periaxonResistivity / (periaxonAnnularArea_internode * 0.00000001) * 0.000001) //(Mohm/cm)
+
+
+    /* xraxial[1] for NEURON - Row 15 of Excel Sheet */
+    xraxial1_value = 1000000000
+    xraxial1_node = xraxial1_value //(Mohm/cm)
+    xraxial1_paranodeOne = xraxial1_value //(Mohm/cm)
+    xraxial1_paranodeTwo = xraxial1_value //(Mohm/cm)
+    xraxial1_paranodeThree = xraxial1_value //(Mohm/cm)
+    xraxial1_paranodeFour = xraxial1_value //(Mohm/cm)
+    xraxial1_juxtaparanode = xraxial1_value //(Mohm/cm)
+    xraxial1_internode = xraxial1_value //(Mohm/cm)
+
+    /* xg[0] for NEURON - Row 16 of Excel Sheet */
+    xg0_node = 1000000000 //(S/cm^2)
+    xg0_paranodeOne = (1 / (tightjunctionResistance_paranodeOne * axonSurfaceArea_paranodeOne)) //(S/cm^2)
+    xg0_paranodeTwo = (1 / (tightjunctionResistance_paranodeTwo * axonSurfaceArea_paranodeTwo)) //(S/cm^2)
+    xg0_paranodeThree = (1 / (tightjunctionResistance_paranodeThree * axonSurfaceArea_paranodeThree)) //(S/cm^2)
+    xg0_paranodeFour = (1 / (tightjunctionResistance_paranodeFour * axonSurfaceArea_paranodeFour)) //(S/cm^2)
+    xg0_juxtaparanode = (1 / (tightjunctionResistance_juxtaparanode * axonSurfaceArea_juxtaparanode)) //(S/cm^2)
+    xg0_internode_compartmental = (1 / (tightjunctionResistance_internode_compartmental * axonSurfaceArea_internode_compartmental)) //(S/cm^2)
+    xg0_internode = (1 / (tightjunctionResistance_internode * axonSurfaceArea_internode)) //(S/cm^2)
+
+    /* xg[1] for NEURON - Row 17 of Excel Sheet */
+    xg1_node = 1000000000 //(S/cm^2)
+    xg1_paranodeOne = (1 / (myelinResistance_paranodeOne * axonSurfaceArea_paranodeOne)) //(S/cm^2)
+    xg1_paranodeTwo = (1 / (myelinResistance_paranodeTwo * axonSurfaceArea_paranodeTwo)) //(S/cm^2)
+    xg1_paranodeThree = (1 / (myelinResistance_paranodeThree * axonSurfaceArea_paranodeThree)) //(S/cm^2)
+    xg1_paranodeFour = (1 / (myelinResistance_paranodeFour * axonSurfaceArea_paranodeFour)) //(S/cm^2)
+    xg1_juxtaparanode = (1 / (myelinResistance_juxtaparanode * axonSurfaceArea_juxtaparanode)) //(S/cm^2)
+    xg1_internode_compartmental = (1 / (myelinResistance_internode_compartmental * axonSurfaceArea_internode_compartmental)) //(S/cm^2)
+    xg1_internode = (1 / (myelinResistance_internode * axonSurfaceArea_internode)) //(S/cm^2)
+
+    /* xc[0] for NEURON - Row 18 of Excel Sheet */
+    xc0_value = 0
+    xc0_node = xc0_value //(uF/cm^2)
+    xc0_paranodeOne = xc0_value //(uF/cm^2)
+    xc0_paranodeTwo = xc0_value //(uF/cm^2)
+    xc0_paranodeThree = xc0_value //(uF/cm^2)
+    xc0_paranodeFour = xc0_value //(uF/cm^2)
+    xc0_juxtaparanode = xc0_value //(uF/cm^2)
+    xc0_internode = xc0_value //(uF/cm^2)
+
+    /* xc[1] for NEURON - Row 19 of Excel Sheet */
+    xc1_node = 0 //(uF/cm^2)
+    xc1_paranodeOne = (myelinCapacitance_paranodeOne / axonSurfaceArea_paranodeOne) //(uF/cm^2)
+    xc1_paranodeTwo = (myelinCapacitance_paranodeTwo / axonSurfaceArea_paranodeTwo) //(uF/cm^2)
+    xc1_paranodeThree = (myelinCapacitance_paranodeThree / axonSurfaceArea_paranodeThree) //(uF/cm^2)
+    xc1_paranodeFour = (myelinCapacitance_paranodeFour / axonSurfaceArea_paranodeFour) //(uF/cm^2)
+    xc1_juxtaparanode = (myelinCapacitance_juxtaparanode / axonSurfaceArea_juxtaparanode) //(uF/cm^2)
+    xc1_internode_compartmental = (myelinCapacitance_internode_compartmental / axonSurfaceArea_internode_compartmental) //(uF/cm^2)
+    xc1_internode = (myelinCapacitance_internode / axonSurfaceArea_internode) //(uF/cm^2)
+
+    /* e_extracellular for NEURON - Row 20 of Excel Sheet */
+    eExtracellular_value = 0
+    eExtracellular_node = eExtracellular_value //(mV)
+    eExtracellular_paranodeOne = eExtracellular_value //(mV)
+    eExtracellular_paranodeTwo = eExtracellular_value //(mV)
+    eExtracellular_paranodeThree = eExtracellular_value //(mV)
+    eExtracellular_paranodeFour = eExtracellular_value //(mV)
+    eExtracellular_juxtaparanode = eExtracellular_value //(mV)
+    eExtracellular_internode = eExtracellular_value //(mV)
+
+} // End of proc_calculateAxonParameters
+
+
+
+
+
+/****************************************************************************************************************************************
+    Name: proc_setPyramidalCellGeometry()
+    Type: Procedure
+
+    Input Parameter(s): None
+    Return Parameter: None
+
+    Description: Procedure to set length, diameter and nseg values for different sections of the pyramidal cell.
+                 The corresponding values for the soma and the dendrites are from the Rumbell/Traub models.
+                 The corresponding values for the axon sections are from the Scurfield-Latimer/Gow-Devaux models.
+
+    Edit History: Created by Nilapratim Sengupta in December 2021.           
+****************************************************************************************************************************************/
+proc proc_setPyramidalCellGeometry() {
+
+    /* Defining geometry of the soma and dendrites */
+    forsec pyramidalCell.Soma { L = 15	diam = 16 }
+    forsec pyramidalCell.Dendrites { L = 50 }
+    forsec pyramidalCell.Distal { diam = 1.6 }
+    forsec pyramidalCell.Oblique { diam = 1 }
+    forsec pyramidalCell.Basal { diam = 1 }		
+    forsec pyramidalCell.Aux { L = 15 / 2		diam = 16 }
+    for i=0,3 pyramidalCell.aux10to13[i]	{ L = (50 / 2)	diam = 8 }
+    pyramidalCell.comp[38] { diam = 8 }
+    pyramidalCell.comp[39] { diam = 8 * 0.9 }
+    pyramidalCell.comp[40] { diam = 8 * 0.8 }
+    forsec pyramidalCell.Level8 { diam = 4 }
+    forsec pyramidalCell.Level9 { diam = 4 }
+    
+
+    /* Scaling length and diameter of the soma and dendrites in accordance with Rumbell et al. 2016 */
+    forsec pyramidalCell.SomaDendrites { L *= 0.724   diam *= 0.724 }  
+
+
+    /* Defining geometry of the hill and the iseg */
+    somaArea = 0
+    pyramidalCell.comp[1] {
+        for(x)  somaArea += area(x) 
+        equivalentDiameter = ((sqrt(somaArea / (4 * PI))) / 10) // Sloper&Powell 1982, Fig. 71
+    }
+
+    pyramidalAxon.hill { L = 10 diam(0:1) = (4 * equivalentDiameter):equivalentDiameter nseg = 5 }
+    pyramidalAxon.iseg { L = 15 diam(0:1) = equivalentDiameter:axonDiameter   nseg = 5 }
+    pyramidalAxon.hill.diam(0) = 4*equivalentDiameter
+    pyramidalAxon.hill.diam(1) = equivalentDiameter
+    pyramidalAxon.iseg.diam(0) = equivalentDiameter
+    pyramidalAxon.iseg.diam(1) = axonDiameter
+
+
+    /* Calculating reduced lengths for remyelinated juxtaparanodes and internodes (if any) */
+    totalParanodeLength = (8 * (3.94 * (axonDiameter / 4)))
+    remyelinatedJuxtaparanodeLength = (((myelinSheathLength - nodeLength) - (2 * totalParanodeLength)) / (2 * (2 + 5))) 
+    remyelinatedInternodeLength = (5 * remyelinatedJuxtaparanodeLength)
+
+    /* Defining geometry of the remaining axon sections */
+    forsec "nodes" { L = nodeLength		diam = axonDiameter		nseg = 13 } //int((L/(0.01*lambda_f(100))+.999)/2)*2 + 1 // Warning: This affects internodes too. So that must be updated later.
+	forsec "paranodeOnes" { L = compartmentalParanodeLength		diam = axonDiameter		nseg = 5 } 
+    forsec "paranodeTwos" { L = compartmentalParanodeLength		diam = axonDiameter		nseg = 5 }
+    forsec "paranodeThrees" { L = compartmentalParanodeLength		diam = axonDiameter		nseg = 5 }
+    forsec "paranodeFours" { L = compartmentalParanodeLength		diam = axonDiameter		nseg = 5 }
+    forsec "juxtaparanodes" { L = compartmentalJuxtaparanodeLength		diam = axonDiameter		nseg = 5 }
+    forsec "internodes" { L = totalInternodeLength		diam = axonDiameter		nseg = 9 } //compartmentalInternodeLength
+
+} // End of proc_setPyramidalCellGeometry
+
+
+
+/****************************************************************************************************************************************
+    Name: proc_setPyramidalCellBiophysics()
+    Type: Procedure
+
+    Input Parameter(s): None
+    Return Parameter: None
+
+    Description: Procedure to set passive and active properties for different sections of the pyramidal cell.
+                 The corresponding values for the soma and the dendrites are from the Rumbell/Traub models.
+                 The corresponding values for the axon sections are from the Scurfield-Latimer/Gow-Devaux models.
+
+    Edit History: Created by Nilapratim Sengupta in December 2021.           
+****************************************************************************************************************************************/
+proc proc_setPyramidalCellBiophysics() {
+
+    /* Defining passive properties of the soma and dendrites */
+    forsec pyramidalCell.Soma {
+        Ra = 250
+        cm = 0.9
+        insert pas
+        g_pas = 2e-05
+        e_pas = -70
+    }
+    forsec pyramidalCell.Dendrites {
+        Ra = 250
+        cm = 0.9
+        insert pas
+        g_pas = 2e-05
+        e_pas = -70
+    }
+    forsec pyramidalCell.Aux {
+        Ra = 250
+        cm = 0
+    }	
+
+    /* Inserting active ion channels in the soma and dendrites */
+    forsec pyramidalCell.Soma {
+        insert cad
+        insert naf 
+        insert nap 
+        insert kdr 
+        insert ka 
+        insert kc
+        insert kahp 
+        insert k2 
+        insert km 
+        insert cat 
+        insert cal 
+        insert ar
+	}
+    forsec pyramidalCell.Dendrites {
+        insert cad
+        insert naf 
+        insert nap 
+        insert kdr 
+        insert ka 
+        insert kc
+        insert kahp 
+        insert k2 
+        insert km 
+        insert cat 
+        insert cal 
+        insert ar
+    }
+
+    /* Defining active properties of the soma and dendrites */
+    pyramidalCell.comp[1] ceiling_cad = 1000
+    forsec pyramidalCell.Soma {
+        phi_cad   = 52 / 2e-3
+        beta_cad  = 1 / 100	// In the paper beta = 50 [ms]
+
+        gbar_naf  = 150e-3 * 1.25
+        gbar_nap  = dnap * 0.0032 * gbar_naf 
+        gbar_kdr  = 125e-3
+        gbar_ka   = 30e-3
+        gbar_kc   = dkc * 7.5e-3 // In tha paper 'dkc * 12e-3'
+        gbar_kahp = 0.1e-3
+        gbar_k2   = 0.1e-3
+        gbar_km   = 2.5 * 1.5e-3 * 2
+        gbar_cat  = 0.1e-3
+        gbar_cal  = 0.5e-3
+        gbar_ar   = 0.25e-3
+    }
+    forsec pyramidalCell.Dendrites {
+        phi_cad   = 52 / 2e-3
+        beta_cad  = 1 / 20
+
+        gbar_naf  = 6.25e-3 
+        gbar_nap  = dnap * 0.0032 * gbar_naf 
+        gbar_kdr  = 0
+        gbar_ka   = 2e-3
+        gbar_kc   = 0
+        gbar_kahp = 0.1e-3
+        gbar_k2   = 0.1e-3
+        gbar_km   = 2.5 * 1.5e-3 * 2
+        gbar_cat  = 0.1e-3
+        gbar_cal  = 0.5e-3
+        gbar_ar   = 0.25e-3
+    }
+    forsec pyramidalCell.Proximal {
+        gbar_naf  = 75e-3 * 1.25
+        gbar_nap  = dnap * 0.0032 * gbar_naf 
+        gbar_kdr  = 75e-3 * 1.25
+        gbar_kc   = dkc * 7.5e-3 // In tha paper 'dkc * 12e-3'
+    }
+    forsec pyramidalCell.Distal {
+        gbar_cal  = 3e-3
+    }
+    pyramidalCell.comp[38] {
+        gbar_ka   = 30e-3
+        gbar_naf  = 125e-3 
+        gbar_nap  = dnap * 0.0032 * gbar_naf // In the FORTRAN code 0.004
+        gbar_kdr  = 125e-3       // In tha paper '75e-3 * 1.25'
+        gbar_kc   = dkc * 7.5e-3 // In tha paper 'dkc * 12e-3'
+    }
+    forsec pyramidalCell.Soma {
+        ena = 50
+        ek  = -95
+        eca = 125
+    }
+    forsec pyramidalCell.Dendrites {
+        ena = 50
+        ek  = -95
+        eca = 125
+    }
+
+    /* Defining passive and active properties of the axon sections */
+    forsec pyramidalAxon.Axon {
+        Ra = 100 //(ohm.cm) Gets updated later
+        cm = 0.9 //(uF/cm^2) Gets updated later
+        insert pas
+        g_pas = 0.001 // Gets updated later
+        e_pas = -70
+    }
+    forsec pyramidalAxon.Axon {
+        insert naf 
+        insert kdr 
+        insert ka 
+        insert k2 
+
+        gbar_naf  = 400e-3  // Gets updated later
+        gbar_kdr  = 400e-3  // Gets updated later
+        gbar_ka   = 2e-3    // Gets updated later
+        gbar_k2   = 0.1e-3  // Gets updated later
+    }
+    for loopCounter=0, (noOfNodes-1) {
+        pyramidalAxon.nodes[loopCounter] {
+            insert extracellular
+            xraxial[0] = xraxial0_node //(Mohm/cm)
+            xraxial[1] = xraxial1_node //(Mohm/cm)
+            xg[0] = xg0_node //(S/cm^2)
+            xg[1] = xg1_node //(S/cm^2)
+            xc[0] = xc0_node //(uF/cm^2)
+            xc[1] = xc1_node //(uF/cm^2)
+            e_extracellular = eExtracellular_node //(mV)
+        }
+    }
+    for loopCounter=0, (noOfParanodeSets-1) {
+        pyramidalAxon.paranodeOnes[loopCounter] {
+            insert extracellular
+            xraxial[0] = xraxial0_paranodeOne //(Mohm/cm)
+            xraxial[1] = xraxial1_paranodeOne //(Mohm/cm)
+            xg[0] = xg0_paranodeOne //(S/cm^2)
+            xg[1] = xg1_paranodeOne //(S/cm^2)
+            xc[0] = xc0_paranodeOne //(uF/cm^2)
+            xc[1] = xc1_paranodeOne //(uF/cm^2)
+            e_extracellular = eExtracellular_paranodeOne //(mV)
+        }
+    }
+    for loopCounter=0, (noOfParanodeSets-1) {
+        pyramidalAxon.paranodeTwos[loopCounter] {
+            insert extracellular
+            xraxial[0] = xraxial0_paranodeTwo //(Mohm/cm)
+            xraxial[1] = xraxial1_paranodeTwo //(Mohm/cm)
+            xg[0] = xg0_paranodeTwo //(S/cm^2)
+            xg[1] = xg1_paranodeTwo //(S/cm^2)
+            xc[0] = xc0_paranodeTwo //(uF/cm^2)
+            xc[1] = xc1_paranodeTwo //(uF/cm^2)
+            e_extracellular = eExtracellular_paranodeTwo //(mV)
+        }
+    }
+    for loopCounter=0, (noOfParanodeSets-1) {
+        pyramidalAxon.paranodeThrees[loopCounter] {
+            insert extracellular
+            xraxial[0] = xraxial0_paranodeThree //(Mohm/cm)
+            xraxial[1] = xraxial1_paranodeThree //(Mohm/cm)
+            xg[0] = xg0_paranodeThree //(S/cm^2)
+            xg[1] = xg1_paranodeThree //(S/cm^2)
+            xc[0] = xc0_paranodeThree //(uF/cm^2)
+            xc[1] = xc1_paranodeThree //(uF/cm^2)
+            e_extracellular = eExtracellular_paranodeThree //(mV)
+        }
+    }
+    for loopCounter=0, (noOfParanodeSets-1) {
+        pyramidalAxon.paranodeFours[loopCounter] {
+            insert extracellular
+            xraxial[0] = xraxial0_paranodeFour //(Mohm/cm)
+            xraxial[1] = xraxial1_paranodeFour //(Mohm/cm)
+            xg[0] = xg0_paranodeFour //(S/cm^2)
+            xg[1] = xg1_paranodeFour //(S/cm^2)
+            xc[0] = xc0_paranodeFour //(uF/cm^2)
+            xc[1] = xc1_paranodeFour //(uF/cm^2)
+            e_extracellular = eExtracellular_paranodeFour //(mV)
+        }
+    }
+    forsec "juxtaparanodes" {
+        insert extracellular
+        xraxial[0] = xraxial0_juxtaparanode //(Mohm/cm)
+        xraxial[1] = xraxial1_juxtaparanode //(Mohm/cm)
+        xg[0] = xg0_juxtaparanode //(S/cm^2)
+        xg[1] = xg1_juxtaparanode //(S/cm^2)
+        xc[0] = xc0_juxtaparanode //(uF/cm^2)
+        xc[1] = xc1_juxtaparanode //(uF/cm^2)
+        e_extracellular = eExtracellular_juxtaparanode //(mV)
+    }
+    forsec "internodes" {
+        insert extracellular
+        xraxial[0] = xraxial0_internode //(Mohm/cm)
+        xraxial[1] = xraxial1_internode //(Mohm/cm)
+        xg[0] = xg0_internode //(S/cm^2) //xg0_internode_compartmental
+        xg[1] = xg1_internode //(S/cm^2) //xg1_internode_compartmental
+        xc[0] = xc0_internode //(uF/cm^2)
+        xc[1] = xc1_internode //(uF/cm^2) //xc1_internode_compartmental
+        e_extracellular = eExtracellular_internode //(mV)
+    }
+
+} // End of proc_setPyramidalCellBiophysics()
+
+
+
+/****************************************************************************************************************************************
+    Name: proc_spineCorrection()
+    Type: Procedure
+
+    Input Parameter(s): None
+    Return Parameter: None
+
+    Description: Procedure to make necessary adjustments to the dendrite properties to account for spines.
+                 The corresponding values for the dendrites are from the Rumbell/Traub models.
+
+    Edit History: Created by Nilapratim Sengupta in December 2021.           
+****************************************************************************************************************************************/
+proc proc_spineCorrection() {
+
+    forsec pyramidalCell.Dendrites {      
+        L  = L * 2
+        Ra = Ra / 2
+    }
+
+} // End of proc_spineCorrection()
+
+
+
+/****************************************************************************************************************************************
+    Name: proc_setConductances()
+    Type: Procedure
+
+    Input Parameter(s): None
+    Return Parameter: None
+
+    Description: Procedure to adjust specific sections of the model based on what needs to be changed in each compartment.
+                 Values set in the dummies are for the soma, values everywhere else gets scaled.
+
+    Edit History: Created by Rumbell/Traub.
+                  Modified by Nilapratim Sengupta in December 2021.           
+****************************************************************************************************************************************/
+proc proc_setConductances() {
+
+    forsec pyramidalCell.Soma {
+		phi_cad 	= dphi_cad
+		beta_cad	= dbeta_cad
+
+		gbar_naf  	= dgnaf
+		gbar_kdr  	= dgkdr
+		gbar_ka  	= dgka
+		gbar_k2   	= dgk2
+		gbar_ar		= dgar
+		gbar_kc   	= 1.6 * dgkc //dkc * dgkc // In tha paper 'dkc * 12e-3'
+		gbar_kahp 	= dgkahp
+		gbar_km  	= dgkm
+		
+		gbar_cad 	= dgcad
+		gbar_nap 	= dgnap
+		gbar_cat 	= dgcat
+		gbar_cal 	= dgcal
+		
+		g_pas	= dg_pas
+		e_pas	= de_pas
+		Ra		= dRa
+		cm		= dcm
+		ena		= dena
+		ek		= dek 
+	}
+
+	forsec pyramidalCell.Dendrites {
+		phi_cad 	= dphi_cad
+		beta_cad	= dbeta_cad * 5
+
+		gbar_naf  	= dgnaf * 0.03333
+		gbar_kdr  	= 0
+		gbar_ka   	= dgka * 0.06667
+		gbar_k2   	= dgk2
+		gbar_ar		= dgar
+		gbar_kc   	= 0
+		gbar_kahp 	= dgkahp
+		gbar_km  	= dgkm
+		
+		gbar_cad 	= dgcad
+		gbar_nap 	= dgnap
+		gbar_cat 	= dgcat
+		gbar_cal 	= dgcal
+		
+		g_pas	= dg_pas
+		e_pas	= de_pas
+		Ra		= dRa
+		cm		= dcm
+		ena		= dena
+		ek		= dek 
+	}
+
+    forsec pyramidalCell.Proximal {	
+		gbar_naf  	= dgnaf * 0.5
+		gbar_kdr  	= dgkdr * 0.75 
+	}
+
+	pyramidalCell.comp[38] {
+		gbar_ka   	= dgka
+		gbar_naf  	= dgnaf * 0.66667
+		gbar_kdr  	= dgkdr * 0.75
+	}
+
+    /* The following get updated later */
+	forsec pyramidalAxon.Axon {
+		gbar_naf  	= dgnaf * 2.133
+		gbar_kdr  	= dgkdr * 3.2
+		gbar_ka   	= dgka / 15
+		gbar_k2   	= dgk2
+		g_pas		= dg_pas //*50, used in Traub
+		e_pas	  	= de_pas
+		Ra		    = dRa //*0.4, used in Traub
+		cm		    = dcm
+		ena		    = dena
+		ek		    = dek 
+	}
+
+    /* The following get updated later */
+	forsec "nodes" { // Should this be made applicable to hill as well?
+	       if( ismembrane("pas") ) g_pas = 0.02
+	}
+	
+	/* The following get updated later */
+	forsec pyramidalAxon.MyelinatedAxon {
+        if( ismembrane("naf") ) gbar_naf  = 0					
+        if( ismembrane("kdr") ) gbar_kdr  = 0
+        if( ismembrane("ka") ) gbar_ka    = 0
+        if( ismembrane("k2") )  gbar_k2   = 0
+        if( ismembrane("pas") ) g_pas = dg_pas
+        cm = dcm * 0.04
+	}
+
+} // End of proc_setConductances()
+
+
+
+/****************************************************************************************************************************************
+    Name: proc_setKinetics()
+    Type: Procedure
+
+    Input Parameter(s): None
+    Return Parameter: None
+
+    Description: Procedure to adjust kinetics of ion channels based on what needs to be changed in each compartment.
+                 Values set in the dummies are for the soma, values everywhere else gets scaled.
+
+    Edit History: Created by Rumbell/Traub.
+                  Modified by Nilapratim Sengupta in December 2021.           
+****************************************************************************************************************************************/
+proc proc_setKinetics() {
+
+    /* Setting taumod values to the optimiser values */
+	mtaumod_naf	= dtmmnaf
+	htaumod_naf	= dtmhnaf
+	taumod_kdr 	= dtmkdr
+	taumod_km 	= dtmkm
+	taumod_kc 	= dtmkc
+	taumod_cal	= dtmcal
+	mtaumod_ka	= dtmmka
+	htaumod_ka	= dtmhka
+	taumod_nap	= dtmnap
+	taumod_ar	= dtmar
+
+	/* Setting usetable values to 0 if needed */
+	if ( mtaumod_naf != 1 ) { usetable_naf = 0 }
+	if ( htaumod_naf != 1 ) { usetable_naf = 0 }
+	if ( taumod_kdr != 1 ) { usetable_kdr = 0 }
+	if ( taumod_km != 1 ) { usetable_km = 0 }
+	if ( taumod_kc != 1 ) { usetable_kc = 0 }
+	if ( taumod_cal != 1 ) {usetable_cal = 0 }
+	if ( mtaumod_ka != 1 ) { usetable_ka = 0 }
+	if ( htaumod_ka != 1 ) { usetable_ka = 0 }
+	if ( usetable_nap != 1 ) {usetable_nap = 0 }
+	if ( usetable_ar != 1 ) {usetable_ar = 0 }
+
+	/* Values for vshifts */
+	fastNashift_naf = dvsnaf
+	vshift_kdr 	= dvskdr
+	vshift_km 	= dvskm
+	vshift_kc 	= dvskc
+	vshift_cal 	= dvscal
+	vshift_ka 	= dvska
+	vshift_nap 	= dvsnap
+	vshift_ar 	= dvsar
+
+	/* Setting usetable values to 0 if needed */
+	if ( fastNashift_naf != -3.5 ) { usetable_naf = 0 }
+	if ( vshift_kdr != 0 ) { usetable_kdr = 0 }
+	if ( vshift_km != 0 ) { usetable_km = 0 }
+	if ( vshift_kc != 0 ) { usetable_kc = 0 }
+	if ( vshift_cal != 0 ) {usetable_cal = 0 }
+	if ( vshift_ka != 0 ) {usetable_ka = 0 }
+	if ( vshift_nap != 0 ) {usetable_nap = 0 }
+	if ( vshift_ar != 0 ) {usetable_ar = 0 }
+
+} // End of proc_setKinetics()
+
+
+
+/****************************************************************************************************************************************
+    Name: proc_setupIClamp()
+    Type: Procedure
+
+    Input Parameter(s): None
+    Return Parameter: None
+
+    Description: Procedure to set up current clamp following Rumbell (2016) protocol.
+
+    Edit History: Created by Nilapratim Sengupta in December 2021.           
+****************************************************************************************************************************************/
+proc proc_setupIClamp() {
+
+    /* Holding phase */
+    pyramidalCell.comp[1] {
+        holdingStimulus = new IClamp(0.5)
+        holdingStimulus.dur	= 2015
+        holdingStimulus.del	= -2000
+        holdingStimulus.amp	= 0
+    }
+
+    /* Stimulation phase */
+    pyramidalCell.comp[1] {
+        currentStimulus = new IClamp(0.5)
+        currentStimulus.dur = (stopTime - 15)
+        currentStimulus.del = 15
+        currentStimulus.amp = -0.15
+
+        dnap = 0 
+        dkc  = 1.6
+    }
+	
+} // End of proc_setupIClamp()
+
+
+
+
+/****************************************************************************************************************************************
+    Name: obfunc_setModelParameters()
+    Type: Function
+
+    Input Parameter(s): None
+    Return Parameter: Matrix Object
+
+    Description: Procedure to populate matrix object with parameter values.
+                 The parameter values are from the Rumbell/Traub models.
+
+    Edit History: Modified by Nilapratim Sengupta in December 2021.           
+****************************************************************************************************************************************/
+obfunc obfunc_setModelParameters() { local noOfChannelParameters   localobj matrix_channelParameters, pv1, pv2, pv3
+
+    /* Defining number of channel parameters */
+    noOfChannelParameters = 23
+
+
+    /* Creating vectors to hold parameter values */
+    pv1 = new Vector()
+	pv2 = new Vector()
+	pv3 = new Vector()
+		
+    pv1.append(0.042039,	0.31611,	0.0047585,	0.010658,	0.0037284,	0.00015574,	9.0673e-05,	830.25,	0.0097944,	1.7771,	8.3288,	18.631,	4.1197,	9.4392,	6.0591,	13.646,	1.1585,	-15.304,	-14.901,	-29.992,	0.43005,	-36.416,	-29.279)
+    pv2.append(0.042802,	0.38121,	0.0074711,	0.0065173,	0.0036778,	0.0001199,	0.0001111,	736.04,	0.0099149,	2.084,	8.2943,	18.156,	3.0562,	12.087,	15.652,	12.51,	1.4208,	-15.248,	-16.265,	-34.251,	3,	-34.01,	-31.586)
+    pv3.append(0.041768,	0.14555,	0.0082385,	0.010291,	0.0050655,	6.6648e-05,	8.8751e-05,	298.08,	0.0097699,	1.6815,	7.2567,	18.566,	2.5945,	16.806,	11.124,	14.507,	1.7094,	-15.111,	-11.65,	-35.18,	-21.203,	-27.749,	-21.756)
+
+
+    /* Creating and populating parameter matrix */
+    matrix_channelParameters = new Matrix (3, noOfChannelParameters)
+    matrix_channelParameters.setrow(0,pv1)
+	matrix_channelParameters.setrow(1,pv2)
+	matrix_channelParameters.setrow(2,pv3)
+    
+    /* Returning parameter matrix */
+	return matrix_channelParameters
+
+} // End of obfunc_setModelParameters()
+
+
+
+
+/****************************************************************************************************************************************
+    Name: proc_setOneParameterSet()
+    Type: Procedure
+
+    Input Parameter(s): Matrix Object
+    Return Parameter: None
+
+    Description: Procedure to set parameters from matrix object.
+                 The parameter values are from the Rumbell/Traub models.
+
+    Edit History: Modified by Nilapratim Sengupta in December 2021.           
+****************************************************************************************************************************************/
+proc proc_setOneParameterSet() {
+
+    /* Setting default parameters from the input matrix object */
+	dgnaf	= $o1.x[0]
+	dgkdr 	= $o1.x[1]
+	dgkm	= $o1.x[2]
+	dgka	= $o1.x[3]
+	dgkahp	= $o1.x[4]
+	dgnap	= $o1.x[5]
+	dgcal	= $o1.x[6]
+	dphi_cad	= $o1.x[7]
+	dbeta_cad	= $o1.x[8]
+	dtmmnaf	= $o1.x[9]
+	dtmhnaf	= $o1.x[10]
+	dtmkdr	= $o1.x[11]
+	dtmkm	= $o1.x[12]
+	dtmmka	= $o1.x[13]
+	dtmhka	= $o1.x[14]
+	dtmnap	= $o1.x[15]
+	dtmcal	= $o1.x[16]
+	dvsnaf	= $o1.x[17]
+	dvskdr	= $o1.x[18]
+	dvskm	= $o1.x[19]
+	dvska	= $o1.x[20]
+	dvsnap	= $o1.x[21]
+	dvscal	= $o1.x[22]
+
+    /* Updating the model with the parameter values */
+    proc_setConductances()
+    proc_setKinetics()
+
+} // End of proc_setOneParameterSet()
+
+
+
+
+/****************************************************************************************************************************************
+    Name: proc_loadAxonMorphologies()
+    Type: Procedure
+
+    Input Parameter(s): 1. Filename (String)
+    Return Parameter: None
+
+    Description: Procedure to populate matrix object with axon morphology/morphologies.
+                 The parameter values are read from the LHS file prepared by Sara Ibanez and modified by Nilapratim Sengupta.
+
+    Edit History: Created by Christina Weaver and Sara Ibanez in May 2020.
+                  Modified by Nilapratim Sengupta in December 2021.           
+****************************************************************************************************************************************/
+proc proc_loadAxonMorphologies() {
+
+    /* Creating file to load axon morphologies */
+	axonFile = new File()
+
+    /* Opening the desired file in read-mode */
+	axonFile.ropen($s1)
+
+    /* Reading the first element (number of rows) to determine size of the population */
+	axonPopulationSize = axonFile.scanvar() 
+
+    /* Reading the second element (number of columns) to determine the number of axon morphology parameters */
+	noOfAxonMorphologyParameters = axonFile.scanvar() 
+
+    /* Creating axon morphology matrix of desired size */
+	matrix_axonMorphologies = new Matrix(axonPopulationSize , noOfAxonMorphologyParameters)
+
+	/* Loading the matrix with morphology data of the population */
+	matrix_axonMorphologies.scanf(axonFile, axonPopulationSize, noOfAxonMorphologyParameters)
+
+    /* Closing the file */
+	axonFile.close()
+
+} // End of proc_loadAxonMorphologies()
+
+
+
+
+/****************************************************************************************************************************************
+    Name: proc_loadAxonPerturbations()
+    Type: Procedure
+
+    Input Parameter(s): 1. Filename (String)
+    Return Parameter: None
+
+    Description: Procedure to populate matrix object with axon perturbation scheme(s).
+                 
+    Edit History: Created by Nilapratim Sengupta in March-April 2022.           
+****************************************************************************************************************************************/
+proc proc_loadAxonPerturbations() {
+
+    /* Creating file to load axon perturbation details */
+	perturbationFile = new File()
+
+    /* Opening the desired file in read-mode */
+	perturbationFile.ropen($s1)
+
+    /* Reading the first element (number of rows) to read the number of segments */
+	axonPerturbationSize = perturbationFile.scanvar() 
+
+    /* Reading the second element (number of columns) to determine the number of axon perturbation schemes */
+	noOfAxonPerturbationVariations = perturbationFile.scanvar() 
+
+    /* Creating axon perturbation matrix of desired size */
+	matrix_axonPerturbations = new Matrix(axonPerturbationSize , noOfAxonPerturbationVariations)
+
+	/* Loading the matrix with perturbation data of the population */
+	matrix_axonPerturbations.scanf(perturbationFile, axonPerturbationSize, noOfAxonPerturbationVariations)
+
+    /* Closing the file */
+	perturbationFile.close()
+
+} // End of proc_loadAxonPerturbations()
+
+
+
+/****************************************************************************************************************************************
+    Name: proc_setAxonMorphology()
+    Type: Procedure
+
+    Input Parameter(s): 1. Vector object (single row from matrix_axonMorphologies)
+    Return Parameter: None
+
+    Description: Procedure to update parameters with values from axon morphology file.
+
+    Edit History: Created by Nilapratim Sengupta in December 2021.           
+****************************************************************************************************************************************/
+proc proc_setAxonMorphology() {
+
+    /* Setting parameters for the axon */
+    axonDiameter = $o1.x[0]
+    nodeLength = $o1.x[1]
+    myelinSheathLength = $o1.x[2]
+    numOfLamellae = $o1.x[3]
+    lamellaThickness = $o1.x[4]
+    g_pas_scaleFactor = $o1.x[5]
+    gbar_naf_scaleFactor = $o1.x[6]
+    gbar_kdr_scaleFactor = $o1.x[7]
+
+} // End of proc_setAxonMorphology()
+
+
+
+
+/*****************************************************************************************************************************************************************
+    Name: proc_setParametersFinal()
+    Type: Procedure
+
+    Input Parameter(s): None
+    Return Parameter: None
+
+    Description: Procedure to update parameters just before run().
+                 This procedure helps adjust parameters for tuning.
+                 The hard-coded scale factors were determined from I-V curve studies while tuning the ion channels in accordance with the Scurfield-Latimer model.
+
+    Edit History: Created by Nilapratim Sengupta in December 2021.           
+*****************************************************************************************************************************************************************/
+proc proc_setParametersFinal() {
+
+    /* Setting parameters for Nodes */
+    forsec pyramidalAxon.Nodes {
+
+        Ra = 150
+        cm = 1
+
+        g_pas = (g_pas_scaleFactor * 0.156000)
+        //e_pas = -70
+
+        gbar_naf = (gbar_naf_scaleFactor * 6)
+        gbar_kdr = (gbar_kdr_scaleFactor * 0.0279)
+        //gbar_ka = 8.33e-05
+        //gbar_k2 = 0
+	}
+    /* Setting parameters for Paranodes */
+    forsec pyramidalAxon.Paranodes {
+        
+        Ra = 150
+        cm = 1
+
+        g_pas = (g_pas_scaleFactor * 0.0005)
+        //e_pas = -70
+
+        gbar_naf = (gbar_naf_scaleFactor * 0.006)
+        gbar_kdr = (gbar_kdr_scaleFactor * 0)
+        //gbar_ka = 0
+        //gbar_k2 = 0
+	}
+    /* Setting parameters for Juxtaparanodes */
+    forsec pyramidalAxon.Juxtaparanodes {
+
+        Ra = 150
+        cm = 1
+
+        g_pas = (g_pas_scaleFactor * 0.005)
+        //e_pas = -70
+
+        gbar_naf = (gbar_naf_scaleFactor * 0.06)
+        gbar_kdr = (gbar_kdr_scaleFactor * 0.279)
+        //gbar_ka = 0
+        //gbar_k2 = 0
+	}
+    /* Setting parameters for Internodes */
+    forsec pyramidalAxon.Internodes {
+
+        Ra = 150
+        cm = 1
+
+        g_pas = (g_pas_scaleFactor * 0.005)
+        //e_pas = -70
+
+        gbar_naf = (gbar_naf_scaleFactor * 0.06)
+        gbar_kdr = (gbar_kdr_scaleFactor * 0.093)
+        //gbar_ka = 0
+        //gbar_k2 = 0
+	}
+
+} // End of proc_setParametersFinal()
+
+
+
+
+
+/*****************************************************************************************************************************************************************
+    Name: proc_applyDemyelination()
+    Type: Procedure
+
+    Input Parameter(s): 1. Diameter of the axon (um)
+		                2. Length of each node um)
+		                3. Lenth of each myelin sheath (um)
+		                4. Number of myelin wraps over each internode
+		                5. Thickness of each myelin wrap (um)
+		                6. Affected internode 
+    Return Parameter: None
+
+    Description: Procedure to calculate values of parameters for healthy/demyelinated segment in myelinated axon implementation using extracellular mechanism.
+                 This procedure is based on calculations listed in an Excel sheet, prepared by Gow-Devaux.
+
+    Edit History: Created by Nilapratim Sengupta in April 2022. 
+				  Modified by Nilapratim Sengupta in June 2022.
+******************************************************************************************************************************************************************/
+proc proc_applyDemyelination() { local affectedInternode
+
+    /* Inputs to the Procedure */
+    axonDiameter = $1
+    nodeLength = $2
+    myelinSheathLength = $3 // Includes internode, juxtaparanodes and paranodes
+    numOfLamellaePerturbed = $4
+    lamellaThickness = $5 // Thickness of each layer of myelin
+    affectedInternode = $6 
+
+    /* Fiber Diameter and g-Ratio */
+    totalFiberDiameter = (axonDiameter + (2 * numOfLamellaePerturbed * lamellaThickness)) // Should internodeDelta be included?
+    gRatio = (axonDiameter / totalFiberDiameter)
+
+
+    /* Lengths - Total and Compartmental */
+    numOfParanodeCompartments = 8 // 4 compartments on either side of the myelinated segment
+    compartmentalParanodeLength = (3.94 * (axonDiameter / 4))
+    totalParanodeLength = (numOfParanodeCompartments * compartmentalParanodeLength)
+
+    numOfJuxtaparanodeCompartments = 2 // 1 compartment on either side of the internode
+    numOfInternodeCompartments = 5
+    compartmentalJuxtaparanodeLength = ((myelinSheathLength - totalParanodeLength) / (numOfJuxtaparanodeCompartments + numOfInternodeCompartments))
+    compartmentalInternodeLength = compartmentalJuxtaparanodeLength
+    totalInternodeLength = (numOfInternodeCompartments * compartmentalInternodeLength)
+
+    /* Peri-axonal Spaces */
+    paranodeDelta = 0.002
+    internodeDelta = 0.02
+
+    /* Myelin Period */
+    myelinPeriod = 0.016
+
+    /* Capacitances */
+    axonCapacitance = 1 //(uF/cm^2)
+    myelinCapacitance = 0.5 //(uF/cm^2)
+
+    /* Resistivities */
+    axoplasmResistivity = 150//70 //(ohm.cm)
+    periaxonResistivity = 150//70 //(ohm.cm)
+    myelinResistivity = 300 //(ohm.cm)
+    tightjunctionResistivity = 600 //(ohm.cm^2)
+
+    /* Cross-sectional Areas - Row 2 of Excel Sheet */
+    //crosssectionArea_node = (PI * (axonDiameter / 2)^2) //(* 10^-8 cm^2)
+    crosssectionArea_paranodeOne = (PI * (axonDiameter / 2)^2) //(* 10^-8 cm^2)
+    crosssectionArea_paranodeTwo = (PI * (axonDiameter / 2)^2) //(* 10^-8 cm^2)
+    crosssectionArea_paranodeThree = (PI * (axonDiameter / 2)^2) //(* 10^-8 cm^2)
+    crosssectionArea_paranodeFour = (PI * (axonDiameter / 2)^2) //(* 10^-8 cm^2)
+    crosssectionArea_juxtaparanode = (PI * (axonDiameter / 2)^2) //(* 10^-8 cm^2)
+    crosssectionArea_internode = (PI * (axonDiameter / 2)^2) //(* 10^-8 cm^2)
+
+    /* Peri-axonal Annular Areas - Row 3 of Excel Sheet */
+    //periaxonAnnularArea_node = ((PI * ((axonDiameter / 2) + paranodeDelta)^2) - crosssectionArea_node) //(* 10^-8 cm^2)
+    periaxonAnnularArea_paranodeOne = ((PI * ((axonDiameter / 2) + paranodeDelta)^2) - crosssectionArea_paranodeOne) //(* 10^-8 cm^2)
+    periaxonAnnularArea_paranodeTwo = ((PI * ((axonDiameter / 2) + paranodeDelta)^2) - crosssectionArea_paranodeTwo) //(* 10^-8 cm^2)
+    periaxonAnnularArea_paranodeThree = ((PI * ((axonDiameter / 2) + paranodeDelta)^2) - crosssectionArea_paranodeThree) //(* 10^-8 cm^2)   
+    periaxonAnnularArea_paranodeFour = ((PI * ((axonDiameter / 2) + paranodeDelta)^2) - crosssectionArea_paranodeFour) //(* 10^-8 cm^2)
+    periaxonAnnularArea_juxtaparanode = ((PI * ((axonDiameter / 2) + internodeDelta)^2) - crosssectionArea_juxtaparanode) //(* 10^-8 cm^2)
+    periaxonAnnularArea_internode = ((PI * ((axonDiameter / 2) + internodeDelta)^2) - crosssectionArea_internode) //(* 10^-8 cm^2)
+
+    /* Surface Areas - Row 4 of Excel Sheet */
+    //axonSurfaceArea_node = (PI * axonDiameter * nodeLength) //(* 10^-8 cm^2)
+    axonSurfaceArea_paranodeOne = (PI * axonDiameter * compartmentalParanodeLength) //(* 10^-8 cm^2) 
+    axonSurfaceArea_paranodeTwo = (PI * axonDiameter * compartmentalParanodeLength) //(* 10^-8 cm^2)
+    axonSurfaceArea_paranodeThree = (PI * axonDiameter * compartmentalParanodeLength) //(* 10^-8 cm^2)
+    axonSurfaceArea_paranodeFour = (PI * axonDiameter * compartmentalParanodeLength) //(* 10^-8 cm^2)
+    axonSurfaceArea_juxtaparanode = (PI * axonDiameter * compartmentalJuxtaparanodeLength) //(* 10^-8 cm^2)
+    axonSurfaceArea_internode_compartmental = (PI * axonDiameter * compartmentalInternodeLength) //(* 10^-8 cm^2)
+    axonSurfaceArea_internode = (PI * axonDiameter * totalInternodeLength) //(* 10^-8 cm^2)
+
+    /* Myelin Thicknesses - Row 7 of Excel Sheet */
+    myelinThickness_internode = (numOfLamellaePerturbed * lamellaThickness) //(um)
+    //myelinThickness_internode = ((axonDiameter / 2 / gRatio) - (axonDiameter / 2) - internodeDelta) //(um) // Gow-Devaux Method
+    myelinThickness_juxtaparanode = myelinThickness_internode //(um)
+    myelinThickness_paranodeFour = (0.8 * myelinThickness_internode) //(um)
+    myelinThickness_paranodeThree = (0.6 * myelinThickness_internode) //(um)
+    myelinThickness_paranodeTwo = (0.4 * myelinThickness_internode) //(um)
+    myelinThickness_paranodeOne = (0.2 * myelinThickness_internode) //(um)
+
+    /* Myelin Wraps - Row 6 of Excel Sheet */
+    myelinWraps_internode = numOfLamellaePerturbed
+    //myelinWraps_internode = (myelinThickness_internode / myelinPeriod) // Gow-Devaux Method
+    myelinWraps_juxtaparanode = myelinWraps_internode
+    myelinWraps_paranodeFour = (0.8 * myelinWraps_internode)
+    myelinWraps_paranodeThree = (0.6 * myelinWraps_internode)
+    myelinWraps_paranodeTwo = (0.4 * myelinWraps_internode)
+    myelinWraps_paranodeOne = (0.2 * myelinWraps_internode)
+
+    /* Myelin Surface Areas - Row 5 of Excel Sheet */
+    myelinSurfaceArea_paranodeOne = (PI * compartmentalParanodeLength * (axonDiameter + (2 * paranodeDelta) + (2 * myelinThickness_paranodeOne))) //(* 10^-8 cm^2) // Formula modified: myelinThickness considered twice (unlike Gow-Devaux Method)
+    myelinSurfaceArea_paranodeTwo = (PI * compartmentalParanodeLength * (axonDiameter + (2 * paranodeDelta) + (2 * myelinThickness_paranodeTwo))) //(* 10^-8 cm^2) // Formula modified: myelinThickness considered twice (unlike Gow-Devaux Method)
+    myelinSurfaceArea_paranodeThree = (PI * compartmentalParanodeLength * (axonDiameter + (2 * paranodeDelta) + (2 * myelinThickness_paranodeThree))) //(* 10^-8 cm^2) // Formula modified: myelinThickness considered twice (unlike Gow-Devaux Method)
+    myelinSurfaceArea_paranodeFour = (PI * compartmentalParanodeLength * (axonDiameter + (2 * paranodeDelta) + (2 * myelinThickness_paranodeFour))) //(* 10^-8 cm^2) // Formula modified: myelinThickness considered twice (unlike Gow-Devaux Method)
+    myelinSurfaceArea_juxtaparanode = (PI * compartmentalJuxtaparanodeLength * (axonDiameter + (2 * internodeDelta) + (2 * myelinThickness_juxtaparanode))) //(* 10^-8 cm^2) // Formula modified: myelinThickness considered twice (unlike Gow-Devaux Method)
+    myelinSurfaceArea_internode_compartmental = (PI * compartmentalInternodeLength * (axonDiameter + (2 * internodeDelta) + (2 * myelinThickness_internode))) //(* 10^-8 cm^2) // Formula modified: myelinThickness considered twice (unlike Gow-Devaux Method)
+    myelinSurfaceArea_internode = (PI * totalInternodeLength * (axonDiameter + (2 * internodeDelta) + (2 * myelinThickness_internode))) //(* 10^-8 cm^2) // Formula modified: myelinThickness considered twice (unlike Gow-Devaux Method)
+
+    /* Axoplasmic Resistances - Row 8 of Excel Sheet */
+    //axoplasmResistance_node = (axoplasmResistivity * nodeLength / crosssectionArea_node) //(10^4 ohm)
+    axoplasmResistance_paranodeOne = (axoplasmResistivity * compartmentalParanodeLength / crosssectionArea_paranodeOne) //(10^4 ohm)
+    axoplasmResistance_paranodeTwo = (axoplasmResistivity * compartmentalParanodeLength / crosssectionArea_paranodeTwo) //(10^4 ohm)
+    axoplasmResistance_paranodeThree = (axoplasmResistivity * compartmentalParanodeLength / crosssectionArea_paranodeThree) //(10^4 ohm)
+    axoplasmResistance_paranodeFour = (axoplasmResistivity * compartmentalParanodeLength / crosssectionArea_paranodeFour) //(10^4 ohm)
+    axoplasmResistance_juxtaparanode = (axoplasmResistivity * compartmentalJuxtaparanodeLength / crosssectionArea_juxtaparanode) //(10^4 ohm)
+    axoplasmResistance_internode_compartmental = (axoplasmResistivity * compartmentalInternodeLength / crosssectionArea_internode) //(10^4 ohm)
+    axoplasmResistance_internode = (axoplasmResistivity * totalInternodeLength / crosssectionArea_internode) //(10^4 ohm)
+
+    /* Peri-axonal Resistances - Row 9 of Excel Sheet */
+    periaxonResistance_paranodeOne = (periaxonResistivity * compartmentalParanodeLength / periaxonAnnularArea_paranodeOne) //(10^4 ohm)
+    periaxonResistance_paranodeTwo = (periaxonResistivity * compartmentalParanodeLength / periaxonAnnularArea_paranodeTwo) //(10^4 ohm)
+    periaxonResistance_paranodeThree = (periaxonResistivity * compartmentalParanodeLength / periaxonAnnularArea_paranodeThree) //(10^4 ohm)
+    periaxonResistance_paranodeFour = (periaxonResistivity * compartmentalParanodeLength / periaxonAnnularArea_paranodeFour) //(10^4 ohm)
+    periaxonResistance_juxtaparanode = (periaxonResistivity * compartmentalJuxtaparanodeLength / periaxonAnnularArea_juxtaparanode) //(10^4 ohm)
+    periaxonResistance_internode_compartmental = (periaxonResistivity * compartmentalInternodeLength / periaxonAnnularArea_internode) //(10^4 ohm)
+    periaxonResistance_internode = (periaxonResistivity * totalInternodeLength / periaxonAnnularArea_internode) //(10^4 ohm)
+
+    /* Axonal Capacitances - Row 10 of Excel Sheet */
+    //axonCapacitance_node = (axonCapacitance * axonSurfaceArea_node) //(10^-8 uF) 
+    axonCapacitance_paranodeOne = (axonCapacitance * axonSurfaceArea_paranodeOne) //(10^-8 uF) 
+    axonCapacitance_paranodeTwo = (axonCapacitance * axonSurfaceArea_paranodeTwo) //(10^-8 uF) 
+    axonCapacitance_paranodeThree = (axonCapacitance * axonSurfaceArea_paranodeThree) //(10^-8 uF) 
+    axonCapacitance_paranodeFour = (axonCapacitance * axonSurfaceArea_paranodeFour) //(10^-8 uF) 
+    axonCapacitance_juxtaparanode = (axonCapacitance * axonSurfaceArea_juxtaparanode) //(10^-8 uF) 
+    axonCapacitance_internode_compartmental = (axonCapacitance * axonSurfaceArea_internode_compartmental) //(10^-8 uF) 
+    axonCapacitance_internode = (axonCapacitance * axonSurfaceArea_internode) //(10^-8 uF) 
+
+    /* Myelin Capacitances - Row 11 of Excel Sheet */
+    myelinCapacitance_paranodeOne = (myelinCapacitance * myelinSurfaceArea_paranodeOne / myelinWraps_paranodeOne) //(10^-8 uF)
+    myelinCapacitance_paranodeTwo = (myelinCapacitance * myelinSurfaceArea_paranodeTwo / myelinWraps_paranodeTwo) //(10^-8 uF)
+    myelinCapacitance_paranodeThree = (myelinCapacitance * myelinSurfaceArea_paranodeThree / myelinWraps_paranodeThree) //(10^-8 uF)
+    myelinCapacitance_paranodeFour = (myelinCapacitance * myelinSurfaceArea_paranodeFour / myelinWraps_paranodeFour) //(10^-8 uF)
+    myelinCapacitance_juxtaparanode = (myelinCapacitance * myelinSurfaceArea_juxtaparanode / myelinWraps_juxtaparanode) //(10^-8 uF)
+    myelinCapacitance_internode_compartmental = (myelinCapacitance * myelinSurfaceArea_internode_compartmental / myelinWraps_internode) //(10^-8 uF)
+    myelinCapacitance_internode = (myelinCapacitance * myelinSurfaceArea_internode / myelinWraps_internode) //(10^-8 uF)
+
+    /* Myelin Resistances - Row 12 of Excel Sheet */
+    myelinResistance_paranodeOne = (myelinResistivity * myelinWraps_paranodeOne / myelinSurfaceArea_paranodeOne) //(10^8 ohm) // Unit checking required
+    myelinResistance_paranodeTwo = (myelinResistivity * myelinWraps_paranodeTwo / myelinSurfaceArea_paranodeTwo) //(10^8 ohm) // Unit checking required
+    myelinResistance_paranodeThree = (myelinResistivity * myelinWraps_paranodeThree / myelinSurfaceArea_paranodeThree) //(10^8 ohm) // Unit checking required
+    myelinResistance_paranodeFour = (myelinResistivity * myelinWraps_paranodeFour / myelinSurfaceArea_paranodeFour) //(10^8 ohm) // Unit checking required
+    myelinResistance_juxtaparanode = (myelinResistivity * myelinWraps_juxtaparanode / myelinSurfaceArea_juxtaparanode) //(10^8 ohm) // Unit checking required
+    myelinResistance_internode_compartmental = (myelinResistivity * myelinWraps_internode / myelinSurfaceArea_internode_compartmental) //(10^8 ohm) // Unit checking required 
+    myelinResistance_internode = (myelinResistivity * myelinWraps_internode / myelinSurfaceArea_internode) //(10^8 ohm) // Unit checking required
+
+    /* Tight Junctional Resistances - Row 13 of Excel Sheet */
+    tightjunctionResistance_paranodeOne = (tightjunctionResistivity / (PI * (axonDiameter + (2 * paranodeDelta)) * compartmentalParanodeLength)) //(10^8 ohm)
+    tightjunctionResistance_paranodeTwo = (tightjunctionResistivity / (PI * (axonDiameter + (2 * paranodeDelta)) * compartmentalParanodeLength)) //(10^8 ohm)
+    tightjunctionResistance_paranodeThree = (tightjunctionResistivity / (PI * (axonDiameter + (2 * paranodeDelta)) * compartmentalParanodeLength)) //(10^8 ohm)
+    tightjunctionResistance_paranodeFour = (tightjunctionResistivity / (PI * (axonDiameter + (2 * paranodeDelta)) * compartmentalParanodeLength)) //(10^8 ohm)
+    tightjunctionResistance_juxtaparanode = (tightjunctionResistivity / (PI * (axonDiameter + (2 * internodeDelta)) * compartmentalJuxtaparanodeLength)) //(10^8 ohm)
+    tightjunctionResistance_internode_compartmental = (tightjunctionResistivity / (PI * (axonDiameter + (2 * internodeDelta)) * compartmentalInternodeLength)) //(10^8 ohm)
+    tightjunctionResistance_internode = (tightjunctionResistivity / (PI * (axonDiameter + (2 * internodeDelta)) * totalInternodeLength)) //(10^8 ohm)
+
+    /* xraxial[0] for NEURON - Row 14 of Excel Sheet */
+    //xraxial0_node = (periaxonResistivity / (periaxonAnnularArea_node *0.00000001) * 0.000001) //(Mohm/cm)
+    xraxial0_paranodeOne = (2 * (periaxonResistivity / (periaxonAnnularArea_paranodeOne * 0.00000001) * 0.000001)) //(Mohm/cm)
+    xraxial0_paranodeTwo = (2 * (periaxonResistivity / (periaxonAnnularArea_paranodeTwo * 0.00000001) * 0.000001)) //(Mohm/cm)
+    xraxial0_paranodeThree = (2 * (periaxonResistivity / (periaxonAnnularArea_paranodeThree * 0.00000001) * 0.000001)) //(Mohm/cm)
+    xraxial0_paranodeFour = (2 * (periaxonResistivity / (periaxonAnnularArea_paranodeFour * 0.00000001) * 0.000001)) //(Mohm/cm)
+    xraxial0_juxtaparanode = (periaxonResistivity / (periaxonAnnularArea_juxtaparanode * 0.00000001) * 0.000001) //(Mohm/cm)
+    xraxial0_internode = (periaxonResistivity / (periaxonAnnularArea_internode * 0.00000001) * 0.000001) //(Mohm/cm)
+
+    /* xraxial[1] for NEURON - Row 15 of Excel Sheet */
+    xraxial1_value = 1000000000
+    //xraxial1_node = xraxial1_value //(Mohm/cm)
+    xraxial1_paranodeOne = xraxial1_value //(Mohm/cm)
+    xraxial1_paranodeTwo = xraxial1_value //(Mohm/cm)
+    xraxial1_paranodeThree = xraxial1_value //(Mohm/cm)
+    xraxial1_paranodeFour = xraxial1_value //(Mohm/cm)
+    xraxial1_juxtaparanode = xraxial1_value //(Mohm/cm)
+    xraxial1_internode = xraxial1_value //(Mohm/cm)
+
+    /* xg[0] for NEURON - Row 16 of Excel Sheet */
+    //xg0_node = 1000000000 //(S/cm^2)
+    xg0_paranodeOne = (1 / (tightjunctionResistance_paranodeOne * axonSurfaceArea_paranodeOne)) //(S/cm^2)
+    xg0_paranodeTwo = (1 / (tightjunctionResistance_paranodeTwo * axonSurfaceArea_paranodeTwo)) //(S/cm^2)
+    xg0_paranodeThree = (1 / (tightjunctionResistance_paranodeThree * axonSurfaceArea_paranodeThree)) //(S/cm^2)
+    xg0_paranodeFour = (1 / (tightjunctionResistance_paranodeFour * axonSurfaceArea_paranodeFour)) //(S/cm^2)
+    xg0_juxtaparanode = (1 / (tightjunctionResistance_juxtaparanode * axonSurfaceArea_juxtaparanode)) //(S/cm^2)
+    xg0_internode_compartmental = (1 / (tightjunctionResistance_internode_compartmental * axonSurfaceArea_internode_compartmental)) //(S/cm^2)
+    xg0_internode = (1 / (tightjunctionResistance_internode * axonSurfaceArea_internode)) //(S/cm^2)
+
+    /* xg[1] for NEURON - Row 17 of Excel Sheet */
+    //xg1_node = 1000000000 //(S/cm^2)
+    xg1_paranodeOne = (1 / (myelinResistance_paranodeOne * axonSurfaceArea_paranodeOne)) //(S/cm^2)
+    xg1_paranodeTwo = (1 / (myelinResistance_paranodeTwo * axonSurfaceArea_paranodeTwo)) //(S/cm^2)
+    xg1_paranodeThree = (1 / (myelinResistance_paranodeThree * axonSurfaceArea_paranodeThree)) //(S/cm^2)
+    xg1_paranodeFour = (1 / (myelinResistance_paranodeFour * axonSurfaceArea_paranodeFour)) //(S/cm^2)
+    xg1_juxtaparanode = (1 / (myelinResistance_juxtaparanode * axonSurfaceArea_juxtaparanode)) //(S/cm^2)
+    xg1_internode_compartmental = (1 / (myelinResistance_internode_compartmental * axonSurfaceArea_internode_compartmental)) //(S/cm^2)
+    xg1_internode = (1 / (myelinResistance_internode * axonSurfaceArea_internode)) //(S/cm^2)
+
+    /* xc[0] for NEURON - Row 18 of Excel Sheet */
+    xc0_value = 0
+    //xc0_node = xc0_value //(uF/cm^2)
+    xc0_paranodeOne = xc0_value //(uF/cm^2)
+    xc0_paranodeTwo = xc0_value //(uF/cm^2)
+    xc0_paranodeThree = xc0_value //(uF/cm^2)
+    xc0_paranodeFour = xc0_value //(uF/cm^2)
+    xc0_juxtaparanode = xc0_value //(uF/cm^2)
+    xc0_internode = xc0_value //(uF/cm^2)
+
+    /* xc[1] for NEURON - Row 19 of Excel Sheet */
+    //xc1_node = 0 //(uF/cm^2)
+    xc1_paranodeOne = (myelinCapacitance_paranodeOne / axonSurfaceArea_paranodeOne) //(uF/cm^2)
+    xc1_paranodeTwo = (myelinCapacitance_paranodeTwo / axonSurfaceArea_paranodeTwo) //(uF/cm^2)
+    xc1_paranodeThree = (myelinCapacitance_paranodeThree / axonSurfaceArea_paranodeThree) //(uF/cm^2)
+    xc1_paranodeFour = (myelinCapacitance_paranodeFour / axonSurfaceArea_paranodeFour) //(uF/cm^2)
+    xc1_juxtaparanode = (myelinCapacitance_juxtaparanode / axonSurfaceArea_juxtaparanode) //(uF/cm^2)
+    xc1_internode_compartmental = (myelinCapacitance_internode_compartmental / axonSurfaceArea_internode_compartmental) //(uF/cm^2)
+    xc1_internode = (myelinCapacitance_internode / axonSurfaceArea_internode) //(uF/cm^2)
+
+    /* e_extracellular for NEURON - Row 20 of Excel Sheet */
+    eExtracellular_value = 0
+    //eExtracellular_node = eExtracellular_value //(mV)
+    eExtracellular_paranodeOne = eExtracellular_value //(mV)
+    eExtracellular_paranodeTwo = eExtracellular_value //(mV)
+    eExtracellular_paranodeThree = eExtracellular_value //(mV)
+    eExtracellular_paranodeFour = eExtracellular_value //(mV)
+    eExtracellular_juxtaparanode = eExtracellular_value //(mV)
+    eExtracellular_internode = eExtracellular_value //(mV)
+
+    /* Applying updated values for parameters to implement demyelination*/
+    for loopCounter=(2*affectedInternode), (2*affectedInternode+1) {
+        pyramidalAxon.paranodeOnes[loopCounter] {
+            insert extracellular
+            xraxial[0] = xraxial0_paranodeOne //(Mohm/cm)
+            xraxial[1] = xraxial1_paranodeOne //(Mohm/cm)
+            xg[0] = xg0_paranodeOne //(S/cm^2)
+            xg[1] = xg1_paranodeOne //(S/cm^2)
+            xc[0] = xc0_paranodeOne //(uF/cm^2)
+            xc[1] = xc1_paranodeOne //(uF/cm^2)
+            e_extracellular = eExtracellular_paranodeOne //(mV)
+        }
+    }
+    for loopCounter=(2*affectedInternode), (2*affectedInternode+1) {
+        pyramidalAxon.paranodeTwos[loopCounter] {
+            insert extracellular
+            xraxial[0] = xraxial0_paranodeTwo //(Mohm/cm)
+            xraxial[1] = xraxial1_paranodeTwo //(Mohm/cm)
+            xg[0] = xg0_paranodeTwo //(S/cm^2)
+            xg[1] = xg1_paranodeTwo //(S/cm^2)
+            xc[0] = xc0_paranodeTwo //(uF/cm^2)
+            xc[1] = xc1_paranodeTwo //(uF/cm^2)
+            e_extracellular = eExtracellular_paranodeTwo //(mV)
+        }
+    }
+    for loopCounter=(2*affectedInternode), (2*affectedInternode+1) {
+        pyramidalAxon.paranodeThrees[loopCounter] {
+            insert extracellular
+            xraxial[0] = xraxial0_paranodeThree //(Mohm/cm)
+            xraxial[1] = xraxial1_paranodeThree //(Mohm/cm)
+            xg[0] = xg0_paranodeThree //(S/cm^2)
+            xg[1] = xg1_paranodeThree //(S/cm^2)
+            xc[0] = xc0_paranodeThree //(uF/cm^2)
+            xc[1] = xc1_paranodeThree //(uF/cm^2)
+            e_extracellular = eExtracellular_paranodeThree //(mV)
+        }
+    }
+    for loopCounter=(2*affectedInternode), (2*affectedInternode+1) {
+        pyramidalAxon.paranodeFours[loopCounter] {
+            insert extracellular
+            xraxial[0] = xraxial0_paranodeFour //(Mohm/cm)
+            xraxial[1] = xraxial1_paranodeFour //(Mohm/cm)
+            xg[0] = xg0_paranodeFour //(S/cm^2)
+            xg[1] = xg1_paranodeFour //(S/cm^2)
+            xc[0] = xc0_paranodeFour //(uF/cm^2)
+            xc[1] = xc1_paranodeFour //(uF/cm^2)
+            e_extracellular = eExtracellular_paranodeFour //(mV)
+        }
+    }
+    for loopCounter=(2*affectedInternode), (2*affectedInternode+1) {
+        pyramidalAxon.juxtaparanodes[loopCounter] {
+            insert extracellular
+            xraxial[0] = xraxial0_juxtaparanode //(Mohm/cm)
+            xraxial[1] = xraxial1_juxtaparanode //(Mohm/cm)
+            xg[0] = xg0_juxtaparanode //(S/cm^2)
+            xg[1] = xg1_juxtaparanode //(S/cm^2)
+            xc[0] = xc0_juxtaparanode //(uF/cm^2)
+            xc[1] = xc1_juxtaparanode //(uF/cm^2)
+            e_extracellular = eExtracellular_juxtaparanode //(mV)
+        }
+    }
+    pyramidalAxon.internodes[affectedInternode] {
+        insert extracellular
+        xraxial[0] = xraxial0_internode //(Mohm/cm)
+        xraxial[1] = xraxial1_internode //(Mohm/cm)
+        xg[0] = xg0_internode //(S/cm^2) //xg0_internode_compartmental
+        xg[1] = xg1_internode //(S/cm^2) //xg1_internode_compartmental
+        xc[0] = xc0_internode //(uF/cm^2)
+        xc[1] = xc1_internode //(uF/cm^2) //xc1_internode_compartmental
+        e_extracellular = eExtracellular_internode //(mV)
+    }
+
+
+} // End of proc_applyDemyelination
+
+
+
+
+/****************************************************************************************************************************************
+    Name: proc_applyRemyelination()
+    Type: Procedure
+
+    Input Parameter(s): 1. Diameter of the axon (um)
+		                2. Length of each node um)
+		                3. Lenth of each myelin sheath (um)
+		                4. Number of myelin wraps over each internode
+		                5. Thickness of each myelin wrap (um)
+		                6. Affected internode 
+    Return Parameter: None
+
+    Description: Procedure to calculate values of parameters for remyelinated segment implementation using extracellular mechanism.
+                 This procedure is based on calculations listed in an Excel sheet, prepared by Gow-Devaux.
+
+    Edit History: Created by Nilapratim Sengupta in May 2022. 
+                  Modified by Nilapratim Sengupta in June 2022.	
+****************************************************************************************************************************************/
+proc proc_applyRemyelination() { local affectedInternode
+
+    /* Inputs to the Procedure */
+    axonDiameter = $1
+    nodeLength = $2
+    myelinSheathLength = $3 // Includes internode, juxtaparanodes and paranodes
+    numOfLamellaePerturbed = $4
+    lamellaThickness = $5 // Thickness of each layer of myelin
+    affectedInternode = $6
+
+    /* Fiber Diameter and g-Ratio */
+    totalFiberDiameter = (axonDiameter + (2 * numOfLamellaePerturbed * lamellaThickness)) // Should internodeDelta be included?
+    gRatio = (axonDiameter / totalFiberDiameter)
+
+
+    /* Lengths - Total and Compartmental */
+    numOfParanodeCompartments = 8 // 4 compartments on either side of the myelinated segment
+    compartmentalParanodeLength = (3.94 * (axonDiameter / 4))
+    totalParanodeLength = (numOfParanodeCompartments * compartmentalParanodeLength)
+
+    numOfJuxtaparanodeCompartments = 2 // 1 compartment on either side of the internode
+    numOfInternodeCompartments = 5
+    remyelinatedJuxtaparanodeLength = (((myelinSheathLength - nodeLength) - (2 * totalParanodeLength)) / (2 * (numOfJuxtaparanodeCompartments + numOfInternodeCompartments)))
+    remyelinatedInternodeLength = (numOfInternodeCompartments * remyelinatedJuxtaparanodeLength)
+
+    /* Peri-axonal Spaces */
+    paranodeDelta = 0.002
+    internodeDelta = 0.02
+
+    /* Myelin Period */
+    myelinPeriod = 0.016
+
+    /* Capacitances */
+    axonCapacitance = 1 //(uF/cm^2)
+    myelinCapacitance = 0.5 //(uF/cm^2)
+
+    /* Resistivities */
+    axoplasmResistivity = 150//70 //(ohm.cm)
+    periaxonResistivity = 150//70 //(ohm.cm)
+    myelinResistivity = 300 //(ohm.cm)
+    tightjunctionResistivity = 600 //(ohm.cm^2)
+
+    /* Cross-sectional Areas - Row 2 of Excel Sheet */
+    //crosssectionArea_node = (PI * (axonDiameter / 2)^2) //(* 10^-8 cm^2)
+    crosssectionArea_paranodeOne = (PI * (axonDiameter / 2)^2) //(* 10^-8 cm^2)
+    crosssectionArea_paranodeTwo = (PI * (axonDiameter / 2)^2) //(* 10^-8 cm^2)
+    crosssectionArea_paranodeThree = (PI * (axonDiameter / 2)^2) //(* 10^-8 cm^2)
+    crosssectionArea_paranodeFour = (PI * (axonDiameter / 2)^2) //(* 10^-8 cm^2)
+    crosssectionArea_juxtaparanodeRemyelinated = (PI * (axonDiameter / 2)^2) //(* 10^-8 cm^2)
+    crosssectionArea_internodeRemyelinated = (PI * (axonDiameter / 2)^2) //(* 10^-8 cm^2)
+
+    /* Peri-axonal Annular Areas - Row 3 of Excel Sheet */
+    //periaxonAnnularArea_node = ((PI * ((axonDiameter / 2) + paranodeDelta)^2) - crosssectionArea_node) //(* 10^-8 cm^2)
+    periaxonAnnularArea_paranodeOne = ((PI * ((axonDiameter / 2) + paranodeDelta)^2) - crosssectionArea_paranodeOne) //(* 10^-8 cm^2)
+    periaxonAnnularArea_paranodeTwo = ((PI * ((axonDiameter / 2) + paranodeDelta)^2) - crosssectionArea_paranodeTwo) //(* 10^-8 cm^2)
+    periaxonAnnularArea_paranodeThree = ((PI * ((axonDiameter / 2) + paranodeDelta)^2) - crosssectionArea_paranodeThree) //(* 10^-8 cm^2)   
+    periaxonAnnularArea_paranodeFour = ((PI * ((axonDiameter / 2) + paranodeDelta)^2) - crosssectionArea_paranodeFour) //(* 10^-8 cm^2)
+    periaxonAnnularArea_juxtaparanodeRemyelinated = ((PI * ((axonDiameter / 2) + internodeDelta)^2) - crosssectionArea_juxtaparanodeRemyelinated) //(* 10^-8 cm^2)
+    periaxonAnnularArea_internodeRemyelinated = ((PI * ((axonDiameter / 2) + internodeDelta)^2) - crosssectionArea_internodeRemyelinated) //(* 10^-8 cm^2)
+
+    /* Surface Areas - Row 4 of Excel Sheet */
+    //axonSurfaceArea_node = (PI * axonDiameter * nodeLength) //(* 10^-8 cm^2)
+    axonSurfaceArea_paranodeOne = (PI * axonDiameter * compartmentalParanodeLength) //(* 10^-8 cm^2) 
+    axonSurfaceArea_paranodeTwo = (PI * axonDiameter * compartmentalParanodeLength) //(* 10^-8 cm^2)
+    axonSurfaceArea_paranodeThree = (PI * axonDiameter * compartmentalParanodeLength) //(* 10^-8 cm^2)
+    axonSurfaceArea_paranodeFour = (PI * axonDiameter * compartmentalParanodeLength) //(* 10^-8 cm^2)
+    axonSurfaceArea_juxtaparanodeRemyelinated = (PI * axonDiameter * remyelinatedJuxtaparanodeLength) //(* 10^-8 cm^2)
+    axonSurfaceArea_internodeRemyelinated = (PI * axonDiameter * remyelinatedInternodeLength) //(* 10^-8 cm^2)
+
+    /* Myelin Thicknesses - Row 7 of Excel Sheet */
+    myelinThickness_internodeRemyelinated = (numOfLamellaePerturbed * lamellaThickness) //(um) 
+    //myelinThickness_internode = ((axonDiameter / 2 / gRatio) - (axonDiameter / 2) - internodeDelta) //(um) // Gow-Devaux Method
+    myelinThickness_juxtaparanodeRemyelinated = myelinThickness_internodeRemyelinated //(um)
+    myelinThickness_paranodeFour = (0.8 * myelinThickness_internodeRemyelinated) //(um)
+    myelinThickness_paranodeThree = (0.6 * myelinThickness_internodeRemyelinated) //(um)
+    myelinThickness_paranodeTwo = (0.4 * myelinThickness_internodeRemyelinated) //(um)
+    myelinThickness_paranodeOne = (0.2 * myelinThickness_internodeRemyelinated) //(um)
+
+    /* Myelin Wraps - Row 6 of Excel Sheet */
+    myelinWraps_internodeRemyelinated = numOfLamellaePerturbed 
+    //myelinWraps_internode = (myelinThickness_internode / myelinPeriod) // Gow-Devaux Method
+    myelinWraps_juxtaparanodeRemyelinated = myelinWraps_internodeRemyelinated
+    myelinWraps_paranodeFour = (0.8 * myelinWraps_internodeRemyelinated)
+    myelinWraps_paranodeThree = (0.6 * myelinWraps_internodeRemyelinated)
+    myelinWraps_paranodeTwo = (0.4 * myelinWraps_internodeRemyelinated)
+    myelinWraps_paranodeOne = (0.2 * myelinWraps_internodeRemyelinated)
+
+    /* Myelin Surface Areas - Row 5 of Excel Sheet */
+    myelinSurfaceArea_paranodeOne = (PI * compartmentalParanodeLength * (axonDiameter + (2 * paranodeDelta) + (2 * myelinThickness_paranodeOne))) //(* 10^-8 cm^2) // Formula modified: myelinThickness considered twice (unlike Gow-Devaux Method)
+    myelinSurfaceArea_paranodeTwo = (PI * compartmentalParanodeLength * (axonDiameter + (2 * paranodeDelta) + (2 * myelinThickness_paranodeTwo))) //(* 10^-8 cm^2) // Formula modified: myelinThickness considered twice (unlike Gow-Devaux Method)
+    myelinSurfaceArea_paranodeThree = (PI * compartmentalParanodeLength * (axonDiameter + (2 * paranodeDelta) + (2 * myelinThickness_paranodeThree))) //(* 10^-8 cm^2) // Formula modified: myelinThickness considered twice (unlike Gow-Devaux Method)
+    myelinSurfaceArea_paranodeFour = (PI * compartmentalParanodeLength * (axonDiameter + (2 * paranodeDelta) + (2 * myelinThickness_paranodeFour))) //(* 10^-8 cm^2) // Formula modified: myelinThickness considered twice (unlike Gow-Devaux Method)
+    myelinSurfaceArea_juxtaparanodeRemyelinated = (PI * remyelinatedJuxtaparanodeLength * (axonDiameter + (2 * internodeDelta) + (2 * myelinThickness_juxtaparanodeRemyelinated))) //(* 10^-8 cm^2) // Formula modified: myelinThickness considered twice (unlike Gow-Devaux Method)
+    myelinSurfaceArea_internodeRemyelinated = (PI * remyelinatedInternodeLength * (axonDiameter + (2 * internodeDelta) + (2 * myelinThickness_internodeRemyelinated))) //(* 10^-8 cm^2) // Formula modified: myelinThickness considered twice (unlike Gow-Devaux Method)
+
+    /* Axoplasmic Resistances - Row 8 of Excel Sheet */
+    //axoplasmResistance_node = (axoplasmResistivity * nodeLength / crosssectionArea_node) //(10^4 ohm)
+    axoplasmResistance_paranodeOne = (axoplasmResistivity * compartmentalParanodeLength / crosssectionArea_paranodeOne) //(10^4 ohm)
+    axoplasmResistance_paranodeTwo = (axoplasmResistivity * compartmentalParanodeLength / crosssectionArea_paranodeTwo) //(10^4 ohm)
+    axoplasmResistance_paranodeThree = (axoplasmResistivity * compartmentalParanodeLength / crosssectionArea_paranodeThree) //(10^4 ohm)
+    axoplasmResistance_paranodeFour = (axoplasmResistivity * compartmentalParanodeLength / crosssectionArea_paranodeFour) //(10^4 ohm)
+    axoplasmResistance_juxtaparanodeRemyelinated = (axoplasmResistivity * remyelinatedJuxtaparanodeLength / crosssectionArea_juxtaparanodeRemyelinated) //(10^4 ohm)
+    axoplasmResistance_internodeRemyelinated = (axoplasmResistivity * remyelinatedInternodeLength / crosssectionArea_internodeRemyelinated) //(10^4 ohm)
+
+    /* Peri-axonal Resistances - Row 9 of Excel Sheet */
+    periaxonResistance_paranodeOne = (periaxonResistivity * compartmentalParanodeLength / periaxonAnnularArea_paranodeOne) //(10^4 ohm)
+    periaxonResistance_paranodeTwo = (periaxonResistivity * compartmentalParanodeLength / periaxonAnnularArea_paranodeTwo) //(10^4 ohm)
+    periaxonResistance_paranodeThree = (periaxonResistivity * compartmentalParanodeLength / periaxonAnnularArea_paranodeThree) //(10^4 ohm)
+    periaxonResistance_paranodeFour = (periaxonResistivity * compartmentalParanodeLength / periaxonAnnularArea_paranodeFour) //(10^4 ohm)
+    periaxonResistance_juxtaparanodeRemyelinated = (periaxonResistivity * remyelinatedJuxtaparanodeLength / periaxonAnnularArea_juxtaparanodeRemyelinated) //(10^4 ohm)
+    periaxonResistance_internodeRemyelinated = (periaxonResistivity * remyelinatedInternodeLength / periaxonAnnularArea_internodeRemyelinated) //(10^4 ohm)
+
+    /* Axonal Capacitances - Row 10 of Excel Sheet */
+    //axonCapacitance_node = (axonCapacitance * axonSurfaceArea_node) //(10^-8 uF) 
+    axonCapacitance_paranodeOne = (axonCapacitance * axonSurfaceArea_paranodeOne) //(10^-8 uF) 
+    axonCapacitance_paranodeTwo = (axonCapacitance * axonSurfaceArea_paranodeTwo) //(10^-8 uF) 
+    axonCapacitance_paranodeThree = (axonCapacitance * axonSurfaceArea_paranodeThree) //(10^-8 uF) 
+    axonCapacitance_paranodeFour = (axonCapacitance * axonSurfaceArea_paranodeFour) //(10^-8 uF) 
+    axonCapacitance_juxtaparanodeRemyelinated = (axonCapacitance * axonSurfaceArea_juxtaparanodeRemyelinated) //(10^-8 uF) 
+    axonCapacitance_internodeRemyelinated = (axonCapacitance * axonSurfaceArea_internodeRemyelinated) //(10^-8 uF) 
+
+    /* Myelin Capacitances - Row 11 of Excel Sheet */
+    myelinCapacitance_paranodeOne = (myelinCapacitance * myelinSurfaceArea_paranodeOne / myelinWraps_paranodeOne) //(10^-8 uF)
+    myelinCapacitance_paranodeTwo = (myelinCapacitance * myelinSurfaceArea_paranodeTwo / myelinWraps_paranodeTwo) //(10^-8 uF)
+    myelinCapacitance_paranodeThree = (myelinCapacitance * myelinSurfaceArea_paranodeThree / myelinWraps_paranodeThree) //(10^-8 uF)
+    myelinCapacitance_paranodeFour = (myelinCapacitance * myelinSurfaceArea_paranodeFour / myelinWraps_paranodeFour) //(10^-8 uF)
+    myelinCapacitance_juxtaparanodeRemyelinated = (myelinCapacitance * myelinSurfaceArea_juxtaparanodeRemyelinated / myelinWraps_juxtaparanodeRemyelinated) //(10^-8 uF)
+    myelinCapacitance_internodeRemyelinated = (myelinCapacitance * myelinSurfaceArea_internodeRemyelinated / myelinWraps_internodeRemyelinated) //(10^-8 uF)
+
+    /* Myelin Resistances - Row 12 of Excel Sheet */
+    myelinResistance_paranodeOne = (myelinResistivity * myelinWraps_paranodeOne / myelinSurfaceArea_paranodeOne) //(10^8 ohm) // Unit checking required
+    myelinResistance_paranodeTwo = (myelinResistivity * myelinWraps_paranodeTwo / myelinSurfaceArea_paranodeTwo) //(10^8 ohm) // Unit checking required
+    myelinResistance_paranodeThree = (myelinResistivity * myelinWraps_paranodeThree / myelinSurfaceArea_paranodeThree) //(10^8 ohm) // Unit checking required
+    myelinResistance_paranodeFour = (myelinResistivity * myelinWraps_paranodeFour / myelinSurfaceArea_paranodeFour) //(10^8 ohm) // Unit checking required
+    myelinResistance_juxtaparanodeRemyelinated = (myelinResistivity * myelinWraps_juxtaparanodeRemyelinated / myelinSurfaceArea_juxtaparanodeRemyelinated) //(10^8 ohm) // Unit checking required
+    myelinResistance_internodeRemyelinated = (myelinResistivity * myelinWraps_internodeRemyelinated / myelinSurfaceArea_internodeRemyelinated) //(10^8 ohm) // Unit checking required
+
+    /* Tight Junctional Resistances - Row 13 of Excel Sheet */
+    tightjunctionResistance_paranodeOne = (tightjunctionResistivity / (PI * (axonDiameter + (2 * paranodeDelta)) * compartmentalParanodeLength)) //(10^8 ohm)
+    tightjunctionResistance_paranodeTwo = (tightjunctionResistivity / (PI * (axonDiameter + (2 * paranodeDelta)) * compartmentalParanodeLength)) //(10^8 ohm)
+    tightjunctionResistance_paranodeThree = (tightjunctionResistivity / (PI * (axonDiameter + (2 * paranodeDelta)) * compartmentalParanodeLength)) //(10^8 ohm)
+    tightjunctionResistance_paranodeFour = (tightjunctionResistivity / (PI * (axonDiameter + (2 * paranodeDelta)) * compartmentalParanodeLength)) //(10^8 ohm)
+    tightjunctionResistance_juxtaparanodeRemyelinated = (tightjunctionResistivity / (PI * (axonDiameter + (2 * internodeDelta)) * remyelinatedJuxtaparanodeLength)) //(10^8 ohm)
+    tightjunctionResistance_internodeRemyelinated = (tightjunctionResistivity / (PI * (axonDiameter + (2 * internodeDelta)) * remyelinatedInternodeLength)) //(10^8 ohm)
+
+    /* xraxial[0] for NEURON - Row 14 of Excel Sheet */
+    //xraxial0_node = (periaxonResistivity / (periaxonAnnularArea_node *0.00000001) * 0.000001) //(Mohm/cm)
+    xraxial0_paranodeOne = (2 * (periaxonResistivity / (periaxonAnnularArea_paranodeOne * 0.00000001) * 0.000001)) //(Mohm/cm)
+    xraxial0_paranodeTwo = (2 * (periaxonResistivity / (periaxonAnnularArea_paranodeTwo * 0.00000001) * 0.000001)) //(Mohm/cm)
+    xraxial0_paranodeThree = (2 * (periaxonResistivity / (periaxonAnnularArea_paranodeThree * 0.00000001) * 0.000001)) //(Mohm/cm)
+    xraxial0_paranodeFour = (2 * (periaxonResistivity / (periaxonAnnularArea_paranodeFour * 0.00000001) * 0.000001)) //(Mohm/cm)
+    xraxial0_juxtaparanodeRemyelinated = (periaxonResistivity / (periaxonAnnularArea_juxtaparanodeRemyelinated * 0.00000001) * 0.000001) //(Mohm/cm)
+    xraxial0_internodeRemyelinated = (periaxonResistivity / (periaxonAnnularArea_internodeRemyelinated * 0.00000001) * 0.000001) //(Mohm/cm)
+
+    /* xraxial[1] for NEURON - Row 15 of Excel Sheet */
+    xraxial1_value = 1000000000
+    //xraxial1_node = xraxial1_value //(Mohm/cm)
+    xraxial1_paranodeOne = xraxial1_value //(Mohm/cm)
+    xraxial1_paranodeTwo = xraxial1_value //(Mohm/cm)
+    xraxial1_paranodeThree = xraxial1_value //(Mohm/cm)
+    xraxial1_paranodeFour = xraxial1_value //(Mohm/cm)
+    xraxial1_juxtaparanodeRemyelinated = xraxial1_value //(Mohm/cm)
+    xraxial1_internodeRemyelinated = xraxial1_value //(Mohm/cm)
+
+    /* xg[0] for NEURON - Row 16 of Excel Sheet */
+    //xg0_node = 1000000000 //(S/cm^2)
+    xg0_paranodeOne = (1 / (tightjunctionResistance_paranodeOne * axonSurfaceArea_paranodeOne)) //(S/cm^2)
+    xg0_paranodeTwo = (1 / (tightjunctionResistance_paranodeTwo * axonSurfaceArea_paranodeTwo)) //(S/cm^2)
+    xg0_paranodeThree = (1 / (tightjunctionResistance_paranodeThree * axonSurfaceArea_paranodeThree)) //(S/cm^2)
+    xg0_paranodeFour = (1 / (tightjunctionResistance_paranodeFour * axonSurfaceArea_paranodeFour)) //(S/cm^2)
+    xg0_juxtaparanodeRemyelinated = (1 / (tightjunctionResistance_juxtaparanodeRemyelinated * axonSurfaceArea_juxtaparanodeRemyelinated)) //(S/cm^2)
+    xg0_internodeRemyelinated = (1 / (tightjunctionResistance_internodeRemyelinated * axonSurfaceArea_internodeRemyelinated)) //(S/cm^2)
+
+    /* xg[1] for NEURON - Row 17 of Excel Sheet */
+    //xg1_node = 1000000000 //(S/cm^2)
+    xg1_paranodeOne = (1 / (myelinResistance_paranodeOne * axonSurfaceArea_paranodeOne)) //(S/cm^2)
+    xg1_paranodeTwo = (1 / (myelinResistance_paranodeTwo * axonSurfaceArea_paranodeTwo)) //(S/cm^2)
+    xg1_paranodeThree = (1 / (myelinResistance_paranodeThree * axonSurfaceArea_paranodeThree)) //(S/cm^2)
+    xg1_paranodeFour = (1 / (myelinResistance_paranodeFour * axonSurfaceArea_paranodeFour)) //(S/cm^2)
+    xg1_juxtaparanodeRemyelinated = (1 / (myelinResistance_juxtaparanodeRemyelinated * axonSurfaceArea_juxtaparanodeRemyelinated)) //(S/cm^2)
+    xg1_internodeRemyelinated = (1 / (myelinResistance_internodeRemyelinated * axonSurfaceArea_internodeRemyelinated)) //(S/cm^2)
+
+    /* xc[0] for NEURON - Row 18 of Excel Sheet */
+    xc0_value = 0
+    //xc0_node = xc0_value //(uF/cm^2)
+    xc0_paranodeOne = xc0_value //(uF/cm^2)
+    xc0_paranodeTwo = xc0_value //(uF/cm^2)
+    xc0_paranodeThree = xc0_value //(uF/cm^2)
+    xc0_paranodeFour = xc0_value //(uF/cm^2)
+    xc0_juxtaparanodeRemyelinated = xc0_value //(uF/cm^2)
+    xc0_internodeRemyelinated = xc0_value //(uF/cm^2)
+
+    /* xc[1] for NEURON - Row 19 of Excel Sheet */
+    //xc1_node = 0 //(uF/cm^2)
+    xc1_paranodeOne = (myelinCapacitance_paranodeOne / axonSurfaceArea_paranodeOne) //(uF/cm^2)
+    xc1_paranodeTwo = (myelinCapacitance_paranodeTwo / axonSurfaceArea_paranodeTwo) //(uF/cm^2)
+    xc1_paranodeThree = (myelinCapacitance_paranodeThree / axonSurfaceArea_paranodeThree) //(uF/cm^2)
+    xc1_paranodeFour = (myelinCapacitance_paranodeFour / axonSurfaceArea_paranodeFour) //(uF/cm^2)
+    xc1_juxtaparanodeRemyelinated = (myelinCapacitance_juxtaparanodeRemyelinated / axonSurfaceArea_juxtaparanodeRemyelinated) //(uF/cm^2)
+    xc1_internodeRemyelinated = (myelinCapacitance_internodeRemyelinated / axonSurfaceArea_internodeRemyelinated) //(uF/cm^2)
+
+    /* e_extracellular for NEURON - Row 20 of Excel Sheet */
+    eExtracellular_value = 0
+    //eExtracellular_node = eExtracellular_value //(mV)
+    eExtracellular_paranodeOne = eExtracellular_value //(mV)
+    eExtracellular_paranodeTwo = eExtracellular_value //(mV)
+    eExtracellular_paranodeThree = eExtracellular_value //(mV)
+    eExtracellular_paranodeFour = eExtracellular_value //(mV)
+    eExtracellular_juxtaparanodeRemyelinated = eExtracellular_value //(mV)
+    eExtracellular_internodeRemyelinated = eExtracellular_value //(mV)
+
+    /* Applying updated values for parameters to implement demyelination*/
+    for loopCounter=(2*affectedInternode), (2*affectedInternode+1) {
+        pyramidalAxon.paranodeOnes[loopCounter] {
+            insert extracellular
+            xraxial[0] = xraxial0_paranodeOne //(Mohm/cm)
+            xraxial[1] = xraxial1_paranodeOne //(Mohm/cm)
+            xg[0] = xg0_paranodeOne //(S/cm^2)
+            xg[1] = xg1_paranodeOne //(S/cm^2)
+            xc[0] = xc0_paranodeOne //(uF/cm^2)
+            xc[1] = xc1_paranodeOne //(uF/cm^2)
+            e_extracellular = eExtracellular_paranodeOne //(mV)
+        }
+    }
+    for loopCounter=(2*affectedInternode), (2*affectedInternode+1) {
+        pyramidalAxon.paranodeTwos[loopCounter] {
+            insert extracellular
+            xraxial[0] = xraxial0_paranodeTwo //(Mohm/cm)
+            xraxial[1] = xraxial1_paranodeTwo //(Mohm/cm)
+            xg[0] = xg0_paranodeTwo //(S/cm^2)
+            xg[1] = xg1_paranodeTwo //(S/cm^2)
+            xc[0] = xc0_paranodeTwo //(uF/cm^2)
+            xc[1] = xc1_paranodeTwo //(uF/cm^2)
+            e_extracellular = eExtracellular_paranodeTwo //(mV)
+        }
+    }
+    for loopCounter=(2*affectedInternode), (2*affectedInternode+1) {
+        pyramidalAxon.paranodeThrees[loopCounter] {
+            insert extracellular
+            xraxial[0] = xraxial0_paranodeThree //(Mohm/cm)
+            xraxial[1] = xraxial1_paranodeThree //(Mohm/cm)
+            xg[0] = xg0_paranodeThree //(S/cm^2)
+            xg[1] = xg1_paranodeThree //(S/cm^2)
+            xc[0] = xc0_paranodeThree //(uF/cm^2)
+            xc[1] = xc1_paranodeThree //(uF/cm^2)
+            e_extracellular = eExtracellular_paranodeThree //(mV)
+        }
+    }
+    for loopCounter=(2*affectedInternode), (2*affectedInternode+1) {
+        pyramidalAxon.paranodeFours[loopCounter] {
+            insert extracellular
+            xraxial[0] = xraxial0_paranodeFour //(Mohm/cm)
+            xraxial[1] = xraxial1_paranodeFour //(Mohm/cm)
+            xg[0] = xg0_paranodeFour //(S/cm^2)
+            xg[1] = xg1_paranodeFour //(S/cm^2)
+            xc[0] = xc0_paranodeFour //(uF/cm^2)
+            xc[1] = xc1_paranodeFour //(uF/cm^2)
+            e_extracellular = eExtracellular_paranodeFour //(mV)
+        }
+    }
+    for loopCounter=(2*affectedInternode), (2*affectedInternode+1) {
+        pyramidalAxon.juxtaparanodes[loopCounter] {
+
+            L = remyelinatedJuxtaparanodeLength		
+            diam = axonDiameter		
+            nseg = 5
+
+            insert extracellular
+            xraxial[0] = xraxial0_juxtaparanodeRemyelinated //(Mohm/cm)
+            xraxial[1] = xraxial1_juxtaparanodeRemyelinated //(Mohm/cm)
+            xg[0] = xg0_juxtaparanodeRemyelinated //(S/cm^2)
+            xg[1] = xg1_juxtaparanodeRemyelinated //(S/cm^2)
+            xc[0] = xc0_juxtaparanodeRemyelinated //(uF/cm^2)
+            xc[1] = xc1_juxtaparanodeRemyelinated //(uF/cm^2)
+            e_extracellular = eExtracellular_juxtaparanodeRemyelinated //(mV)
+        }
+    }
+    pyramidalAxon.internodes[affectedInternode] {
+
+        L = remyelinatedInternodeLength		
+        diam = axonDiameter		
+        nseg = 9 //compartmentalInternodeLength
+        
+        insert extracellular
+        xraxial[0] = xraxial0_internodeRemyelinated //(Mohm/cm)
+        xraxial[1] = xraxial1_internodeRemyelinated //(Mohm/cm)
+        xg[0] = xg0_internodeRemyelinated //(S/cm^2) //xg0_internode
+        xg[1] = xg1_internodeRemyelinated //(S/cm^2) //xg1_internode
+        xc[0] = xc0_internodeRemyelinated //(uF/cm^2)
+        xc[1] = xc1_internodeRemyelinated //(uF/cm^2) //xc1_internode
+        e_extracellular = eExtracellular_internodeRemyelinated //(mV)
+    }
+	
+	
+} // End of proc_applyRemyelination
+
+
+
+
+
+
+
+/****************************************************************************************************************************************************
+    Name: proc_updateRemyelinatedAxon()
+    Type: Procedure
+
+    Input Parameter(s): 1. Population Counter
+		                2. Perturbation Counter
+
+    Return Parameter: None
+
+    Description: Procedure to replace the old axon with new axon. 
+                 If a perturbation scheme involves remyelination, necessary creation of new shorter remyelinated segments is carried out.
+
+    Edit History: Created by Nilapratim Sengupta in May 2022.     
+                  Modified by Nilapratim Sengupta in June 2022.      
+*****************************************************************************************************************************************************/
+proc proc_updateRemyelinatedAxon() { local populationCounter, perturbationCounter, counter
+
+    /* Retrieving data from input parameters */
+    populationCounter = $1
+    perturbationCounter = $2
+
+    /* Disconnect healthy axon from the cell body */
+    pyramidalAxon.hill disconnect()
+
+    /* Deleting healthy axon */
+    forsec "Axon" delete_section()
+    
+    /* No. of internodes in healthy axon */
+    noOfOriginalInternodes = matrix_axonPerturbations.nrow()
+
+    vector_axonPerturbationsInternodes = new Vector()
+    vector_axonPerturbationsLamellae = new Vector()
+    internodeType = new Vector(noOfOriginalInternodes)
+    for counter=0, noOfOriginalInternodes-1 { 
+		internodeType.x[counter] = matrix_axonPerturbations.x[counter][perturbationCounter] // internodeType is either 1 (healthy/demyelinated) or 2 (remyelinated)
+        if (internodeType.x[counter]==1){
+            vector_axonPerturbationsInternodes.append(1)
+            vector_axonPerturbationsLamellae.append(matrix_axonPerturbations.x[counter][perturbationCounter+1])
+        }
+        if (internodeType.x[counter]==2){
+            vector_axonPerturbationsInternodes.append(2)
+            vector_axonPerturbationsLamellae.append(matrix_axonPerturbations.x[counter][perturbationCounter+1])
+            vector_axonPerturbationsInternodes.append(2)
+            vector_axonPerturbationsLamellae.append(matrix_axonPerturbations.x[counter][perturbationCounter+1])
+        }
+	}
+
+    /* Topological parameters */
+	nodeCount = 0
+	internodeCount1 = 0
+	internodeCount2 = 0
+
+	for counter=0, noOfOriginalInternodes-1 { 
+		nodeCount = nodeCount + internodeType.x[counter]
+		if (internodeType.x[counter] == 1) {
+			internodeCount1 = internodeCount1 + internodeType.x[counter]  
+        } else {
+			internodeCount2 = internodeCount2 + internodeType.x[counter] 
+    	}
+	}
+
+    /* Updating counts of compartments after remyelination-induced splits (if any) */
+    noOfNodes = (nodeCount + 1)
+	noOfParanodeSets = ((2 * noOfNodes) - 2) 
+	noOfHealthyInternodes = internodeCount1
+	noOfRemyelinatedInternodes = internodeCount2
+    noOfInternodes = (noOfHealthyInternodes + noOfRemyelinatedInternodes)
+	noOfHealthyJuxtaparanodeSets = (2 * internodeCount1)
+	noOfRemyelinatedJuxtaparanodeSets = (2 * internodeCount2)
+    noOfJuxtaparanodeSets = (noOfHealthyJuxtaparanodeSets + noOfRemyelinatedJuxtaparanodeSets)
+
+    /* Updating other relevant parameters */
+    distalLocation = (noOfNodes-2)
+    distalLocationJuxtaparanode = (noOfJuxtaparanodeSets-1)
+    distalLocationInternode = (noOfInternodes-1)
+
+    /* Creating the healthy axon */
+    pyramidalAxon = new template_pyramidalAxon() // Instantiating from the healthy axon template.
+
+    /* Connecting the axon to the cell body */
+    pyramidalCell.comp[1] connect pyramidalAxon.hill(0), 0.5 
+
+    
+} // End of proc_updateRemyelinatedAxon
+
+
+
+
+
+
+
+

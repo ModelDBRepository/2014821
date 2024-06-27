@@ -1,0 +1,111 @@
+/******************************************************************************************************************************************************
+
+    Description: The myelinated axon is based on the works of Scurfield and Latimer (2018), which in turn is based on a model by Gow and Devaux (2008).
+
+    Edit History: Created by Nilapratim Sengupta in May 2022.
+				  Modified by Nilapratim Sengupta in June 2022.
+
+*******************************************************************************************************************************************************/
+/* Beginning template definition */
+begintemplate template_pyramidalAxon
+
+	/* Declaring variables which are defined outside the template */
+	external noOfNodes, noOfParanodeSets, noOfJuxtaparanodeSets, noOfInternodes
+
+
+	/* Declaring public components to be accessed from outside */
+	public hill, iseg, nodes, paranodeOnes, paranodeTwos, paranodeThrees, paranodeFours, juxtaparanodes, internodes
+	public Nodes, ParanodeOnes, ParanodeTwos, ParanodeThrees, ParanodeFours, Paranodes, Juxtaparanodes, Internodes
+	public Axon, ExposedAxon, MyelinatedAxon
+
+	/* Creating sections (since direct creation within procedure init() is not allowed) */
+	create hill, iseg
+	create nodes[1], paranodeOnes[1], paranodeTwos[1], paranodeThrees[1], paranodeFours[1]
+	create juxtaparanodes[1], internodes[1]
+
+	/* Creating object references outside init() */
+	objref Nodes, ParanodeOnes, ParanodeTwos, ParanodeThrees, ParanodeFours, Paranodes
+    objref Juxtaparanodes, Internodes
+	objref Axon, ExposedAxon, MyelinatedAxon
+	
+
+	/* Defining procedure init() which is invoked every time the template is instantiated */
+	proc init() {
+		
+		/* Creating different sections within init() */
+		create hill, iseg
+		create nodes[noOfNodes], paranodeOnes[noOfParanodeSets], paranodeTwos[noOfParanodeSets], paranodeThrees[noOfParanodeSets], paranodeFours[noOfParanodeSets]
+		create juxtaparanodes[noOfJuxtaparanodeSets], internodes[noOfInternodes]
+
+
+		/* Creating object references within init() */
+		objref Nodes, ParanodeOnes, ParanodeTwos, ParanodeThrees, ParanodeFours, Paranodes
+        objref Juxtaparanodes, Internodes
+		objref Axon, ExposedAxon, MyelinatedAxon
+
+
+		/* Defining topology of the pyramidal cell */
+		connect iseg(0), hill(1)
+		connect nodes[0](0), iseg(1)
+		for loopCounter=0, (noOfNodes-2) {
+			connect paranodeOnes[2*loopCounter](0), nodes[loopCounter](1)
+			connect paranodeTwos[2*loopCounter](0), paranodeOnes[2*loopCounter](1)
+			connect paranodeThrees[2*loopCounter](0), paranodeTwos[2*loopCounter](1)
+			connect paranodeFours[2*loopCounter](0), paranodeThrees[2*loopCounter](1)
+			connect juxtaparanodes[2*loopCounter](0), paranodeFours[2*loopCounter](1)
+			connect internodes[loopCounter](0), juxtaparanodes[2*loopCounter](1)
+			connect juxtaparanodes[2*loopCounter+1](0), internodes[loopCounter](1)
+			connect paranodeFours[2*loopCounter+1](0), juxtaparanodes[2*loopCounter+1](1)
+			connect paranodeThrees[2*loopCounter+1](0), paranodeFours[2*loopCounter+1](1)
+			connect paranodeTwos[2*loopCounter+1](0), paranodeThrees[2*loopCounter+1](1)
+			connect paranodeOnes[2*loopCounter+1](0), paranodeTwos[2*loopCounter+1](1)
+			connect nodes[loopCounter+1](0), paranodeOnes[2*loopCounter+1](1)
+		}
+
+
+		/* Defining subsets (sectionLists) within the pyramidal cell */
+		ParanodeOnes = new SectionList()
+		 forsec "paranodeOnes" ParanodeOnes.append()
+		ParanodeTwos = new SectionList()
+		 forsec "paranodeTwos" ParanodeTwos.append()
+		ParanodeThrees = new SectionList()
+		 forsec "paranodeThrees" ParanodeThrees.append()
+		ParanodeFours = new SectionList()
+		 forsec "paranodeFours" ParanodeFours.append()
+		Paranodes = new SectionList()
+		 forsec "paranodeOnes" Paranodes.append()
+		 forsec "paranodeTwos" Paranodes.append()
+		 forsec "paranodeThrees" Paranodes.append()
+		 forsec "paranodeFours" Paranodes.append()
+		Juxtaparanodes = new SectionList()
+		 forsec "juxtaparanodes" Juxtaparanodes.append()
+		Internodes = new SectionList()
+		 forsec "internodes" Internodes.append()
+		Nodes = new SectionList()
+		 forsec "nodes" Nodes.append()
+		Axon = new SectionList()
+		 hill Axon.append()	
+		 iseg Axon.append()
+		 forsec "nodes" Axon.append()
+		 forsec "paranodeOnes" Axon.append()
+		 forsec "paranodeTwos" Axon.append()
+		 forsec "paranodeThrees" Axon.append()
+		 forsec "paranodeFours" Axon.append()
+		 forsec "juxtaparanodes" Axon.append()
+		 forsec "internodes" Axon.append()
+		ExposedAxon = new SectionList()
+		 hill ExposedAxon.append()
+		 iseg ExposedAxon.append()
+		 forsec "nodes" ExposedAxon.append()
+		MyelinatedAxon = new SectionList()
+		 forsec "paranodeOnes" MyelinatedAxon.append()
+		 forsec "paranodeTwos" MyelinatedAxon.append()
+		 forsec "paranodeThrees" MyelinatedAxon.append()
+		 forsec "paranodeFours" MyelinatedAxon.append()
+		 forsec "juxtaparanodes" MyelinatedAxon.append()
+		 forsec "internodes" MyelinatedAxon.append()
+
+
+	} // End of init()
+
+endtemplate template_pyramidalAxon

@@ -1,0 +1,98 @@
+/****************************************************************************************************************************************
+
+    Description: File for plotting graphs.
+
+    Edit History: Created by Nilapratim Sengupta in December 2021.
+                 
+****************************************************************************************************************************************/
+
+/* Declaring object references */
+objref graph_membranePotentials, graph_ionicCurrents, graph_membranePotentialsExtra
+
+
+/****************************************************************************************************************************************
+    Name: proc_plotMembranePotentials()
+    Type: Procedure
+
+    Input Parameter(s): None
+    Return Parameter: None
+
+    Description: Procedure to plot membrane potential(s) at defined location(s).
+
+    Edit History: Created by Nilapratim Sengupta in December 2021.  
+****************************************************************************************************************************************/
+proc proc_plotMembranePotentials() {
+    
+    /* For proximal location */
+    graph_membranePotentials = new Graph(0)
+    addplot(graph_membranePotentials, 0)
+    graph_membranePotentials.view(0, -70, tstop, 130, 630, 22, 600, 240)
+    graph_membranePotentials.brush(4)
+    graph_membranePotentials.color(1)
+    graph_membranePotentials.label(0.5, 0.01, "Proximal Location")
+    graph_membranePotentials.label(0.03, 0.15, "mV")
+    graph_membranePotentials.label(0.9, 0.9, "ms")
+    graph_membranePotentials.addvar("Initial Segment", "pyramidalAxon.iseg.v(0.5)", 1, 3)
+    graph_membranePotentials.addvar("Left Node", "pyramidalAxon.nodes[proximalLocation].v(0.5)", 4, 3)
+    graph_membranePotentials.addvar("Left ParanodeThree", "pyramidalAxon.paranodeThrees[2*proximalLocation].v(0.5)", 9, 3)
+    graph_membranePotentials.addvar("Left Juxtaparanode", "pyramidalAxon.juxtaparanodes[2*proximalLocation].v(0.5)", 7, 3)
+    graph_membranePotentials.addvar("Internode", "pyramidalAxon.internodes[proximalLocation].v(0.5)", 2, 3)
+    graph_membranePotentials.addvar("Right Juxtaparanode", "pyramidalAxon.juxtaparanodes[2*proximalLocation+1].v(0.5)", 6, 3)
+    graph_membranePotentials.addvar("Right ParanodeThree", "pyramidalAxon.paranodeThrees[2*proximalLocation+1].v(0.5)", 5, 3)
+    graph_membranePotentials.addvar("Right Node", "pyramidalAxon.nodes[proximalLocation+1].v(0.5)", 3, 3)
+
+    /* For distal location */
+    graph_membranePotentialsExtra = new Graph(0)
+    addplot(graph_membranePotentialsExtra, 0)
+    graph_membranePotentialsExtra.view(0, -70, tstop, 130, 630, 360, 600, 240)
+    graph_membranePotentialsExtra.brush(4)
+    graph_membranePotentialsExtra.color(1)
+    graph_membranePotentialsExtra.label(0.5, 0.01, "Distal Location")
+    graph_membranePotentialsExtra.label(0.03, 0.15, "mV")
+    graph_membranePotentialsExtra.label(0.9, 0.9, "ms")
+    graph_membranePotentialsExtra.addvar("Initial Segment", "pyramidalAxon.iseg.v(0.5)", 1, 3)
+    graph_membranePotentialsExtra.addvar("Left Node", "pyramidalAxon.nodes[distalLocation].v(0.5)", 4, 3)
+    graph_membranePotentialsExtra.addvar("Left ParanodeThree", "pyramidalAxon.paranodeThrees[2*distalLocation].v(0.5)", 9, 3)
+    graph_membranePotentialsExtra.addvar("Left Juxtaparanode", "pyramidalAxon.juxtaparanodes[2*distalLocation].v(0.5)", 7, 3)
+    graph_membranePotentialsExtra.addvar("Internode", "pyramidalAxon.internodes[distalLocation].v(0.5)", 2, 3)
+    graph_membranePotentialsExtra.addvar("Right Juxtaparanode", "pyramidalAxon.juxtaparanodes[2*distalLocation+1].v(0.5)", 6, 3)
+    graph_membranePotentialsExtra.addvar("Right ParanodeThree", "pyramidalAxon.paranodeThrees[2*distalLocation+1].v(0.5)", 5, 3)
+    graph_membranePotentialsExtra.addvar("Right Node", "pyramidalAxon.nodes[distalLocation+1].v(0.5)", 3, 3)
+
+
+} // End of proc_plotMembranePotentials()
+
+
+
+
+/****************************************************************************************************************************************
+    Name: proc_plotIonicCurrents()
+    Type: Procedure
+
+    Input Parameter(s): None
+    Return Parameter: None
+
+    Description: Procedure to plot ionic currents at defined location(s).
+
+    Edit History: Created by Nilapratim Sengupta in December 2021.  
+****************************************************************************************************************************************/
+proc proc_plotIonicCurrents() {
+
+    graph_ionicCurrents = new Graph(0)
+    addplot(graph_ionicCurrents, 1)
+    graph_ionicCurrents.view(0, -10, tstop, 20, 630, 660, 600, 240)
+    graph_ionicCurrents.brush(4)
+    graph_ionicCurrents.color(1)
+    graph_ionicCurrents.label(0.5, 0.01, "Currents: Proximal Location")
+    graph_ionicCurrents.label(0.03, 0.15, "nA")
+    graph_ionicCurrents.label(0.9, 0.9, "ms")
+    graph_ionicCurrents.addvar("Initial Segment", "pyramidalAxon.iseg.ina_naf(0.5)", 1, 3)
+    graph_ionicCurrents.addvar("Left Node", "pyramidalAxon.nodes[proximalLocation].ina_naf(0.5)", 4, 3)
+    graph_ionicCurrents.addvar("Left ParanodeThree", "pyramidalAxon.paranodeThrees[proximalLocation].ina_naf(0.5)", 9, 3)
+    graph_ionicCurrents.addvar("Left Juxtaparanode", "pyramidalAxon.juxtaparanodes[proximalLocation].ina_naf(0.5)", 7, 3)
+    graph_ionicCurrents.addvar("Internode", "pyramidalAxon.internodes[proximalLocation].ina_naf(0.5)", 2, 3)
+    graph_ionicCurrents.addvar("Right Juxtaparanode", "pyramidalAxon.juxtaparanodes[proximalLocation+1].ina_naf(0.5)", 6, 3)
+    graph_ionicCurrents.addvar("Right ParanodeThree", "pyramidalAxon.paranodeThrees[proximalLocation+1].ina_naf(0.5)", 5, 3)
+    graph_ionicCurrents.addvar("Right Node", "pyramidalAxon.nodes[proximalLocation+1].ina_naf(0.5)", 3, 3)
+
+} // End of proc_plotIonicCurrents()

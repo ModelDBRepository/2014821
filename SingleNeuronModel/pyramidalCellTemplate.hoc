@@ -1,0 +1,128 @@
+/***************************************************************************************************************************************
+
+    Description: The soma and the dendritic arbor is based on the works of Rumbell et al. (2016): ModelDB entry 184497.
+                 The Rumbell (2016) model borrows from the works of Traub et al. (2003): ModelDB entry 20756.
+
+    Edit History: Modified by Christina Weaver in May 2020.
+                  Modified by Nilapratim Sengupta in December 2021.
+				  Modified by Nilapratim Sengupta in May 2022.
+
+***************************************************************************************************************************************/
+/* Beginning template definition */
+begintemplate template_pyramidalCell
+
+	/* Declaring variables which are defined outside the template */
+	external noOfComp, noOfAux1, noOfAux2
+
+	/* Declaring public components to be accessed from outside */
+	public comp, aux10to13, aux38, aux2to9
+	public Level1, Level2, Level3,  Level4, Level5, Level6, Level7, Level8, Level9, Level10, Level11, Level12
+	public All, Soma, Dendrites, Aux, SomaDendrites, Basal, Oblique, Proximal, Distal
+
+	/* Creating sections (since direct creation within procedure init() is not allowed) */
+	create comp[1], aux10to13[1], aux38, aux2to9[1]
+
+	/* Creating object references outside init() */
+	objref All, Soma, Dendrites, Aux, SomaDendrites, Basal, Oblique, Proximal, Distal
+	objref Level1, Level2, Level3, Level4, Level5, Level6, Level7, Level8, Level9, Level10, Level11, Level12
+	
+
+	/* Defining procedure init() which is invoked every time the template is instantiated */
+	proc init() {
+		
+		/* Creating different sections within init() */
+		create comp[noOfComp], aux10to13[noOfAux1], aux38, aux2to9[noOfAux2]
+
+
+		/* Deleting comp[0] since model starts from comp[1] which is the soma */
+		comp[0] delete_section()
+
+		/* Creating object references within init() */
+		objref All, Soma, Dendrites, Aux, SomaDendrites, Basal, Oblique, Proximal, Distal
+		objref Level1, Level2, Level3, Level4, Level5, Level6, Level7, Level8, Level9, Level10, Level11, Level12
+
+		/* Defining topology of the pyramidal cell */
+		// Apical
+		for i=61,68 connect comp[i](0), comp[i-8](1)
+		for i=53,60 connect comp[i](0), comp[i-8](1)
+		for i=49,52 connect comp[i](0), comp[44](1)
+		for i=45,48 connect comp[i](0), comp[43](1)
+		for i=43,44 connect comp[i](0), comp[i-2](1)
+		for i=41,42 connect comp[i](0), comp[40](1)
+		connect comp[40](0), comp[39](1)
+		connect comp[39](0), comp[38](1)
+		connect comp[38](0), aux38(1)
+		connect	aux38(0), comp[1](0.5)
+		// Oblique Apical
+		for i=0,3 connect aux10to13[i](0), comp[38](0.5)
+		for i=0,3 connect comp[i+10](0), aux10to13[i](1)
+		for i=0,3 connect comp[i+22](0), comp[i+10](1)
+		for i=0,3 connect comp[i+34](0), comp[i+22](1)
+		// Basal
+		for i=0,7 connect aux2to9[i](0), comp[1](0.5)
+		for i=0,7 connect comp[i+2](0), aux2to9[i](1)
+		for i=0,7 connect comp[i+14](0), comp[i+2](1)
+		for i=0,7 connect comp[i+26](0), comp[i+14](1)
+
+
+		/* Defining subsets within the pyramidal cell */
+		Level1 = new SectionList()
+		 comp[1] Level1.append()    
+		Level2 = new SectionList()
+		 for i=2,13 comp[i] Level2.append()    
+		Level3 = new SectionList()
+		 for i=14,25 comp[i] Level3.append()
+		Level4 = new SectionList()
+		 for i=26,37 comp[i] Level4.append()
+		Level5 = new SectionList()
+		 comp[38] Level5.append()
+		Level6 = new SectionList()
+		 comp[39] Level6.append()
+		Level7 = new SectionList()
+		 comp[40] Level7.append()
+		Level8 = new SectionList()
+		 for i=41,42 comp[i] Level8.append()
+		Level9 = new SectionList()
+		 for i=43,44 comp[i] Level9.append()
+		Level10 = new SectionList()
+		 for i=45,52 comp[i] Level10.append()
+		Level11 = new SectionList()
+		 for i=53,60 comp[i] Level11.append()
+		Level12 = new SectionList()
+		 for i=60,68 comp[i] Level12.append()
+		Soma = new SectionList()
+		 comp[1] Soma.append()
+		Dendrites = new SectionList()
+		 for i=2,68 comp[i] Dendrites.append()
+		 //forsec Aux Dendrites.append() // Should Aux be a part of Dendrites?
+		Aux = new SectionList()
+		 for i=0,3 aux10to13[i] Aux.append()
+		 aux38 Aux.append()
+		 for i=0,7 aux2to9[i] Aux.append()
+		SomaDendrites = new SectionList() 
+		 for i=1,68 comp[i] SomaDendrites.append()
+		 //forsec Aux SomaDendrites.append() // Should Aux be a part of SomaDendrites?
+		Basal = new SectionList()
+		 for i=2,9 comp[i] Basal.append()
+		 for i=14,21 comp[i] Basal.append()
+		 for i=26,33 comp[i] Basal.append()
+		Oblique = new SectionList()
+		 for i=10,13 comp[i] Oblique.append()
+		 for i=22,25 comp[i] Oblique.append()
+		 for i=34,37 comp[i] Oblique.append()
+		Proximal = new SectionList()
+		 forsec Level2 Proximal.append()
+		 forsec Level6 Proximal.append()
+		Distal = new SectionList()
+		 forsec Level10 Distal.append()
+		 forsec Level11 Distal.append()
+		 forsec Level12 Distal.append()
+		All = new SectionList()
+		 forsec Soma All.append()
+		 forsec Dendrites All.append()
+		 forsec Aux All.append()
+
+
+	} // End of init()
+
+endtemplate template_pyramidalCell

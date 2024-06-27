@@ -1,0 +1,176 @@
+/****************************************************************************************************************************************
+
+    Description: File listing essential parameters and their default values.
+
+    Edit History: Created by Nilapratim Sengupta in December 2021.
+	              Modified by Nilapratim Sengupta in March 2022 to incorporate demyelination implementation.
+				  Modified by Nilapratim Sengupta in May 2022 to incorporate remyelination implementation.
+				  Modified by Nilapratim Sengupta in June 2023 for ModelDB upload.
+                 
+****************************************************************************************************************************************/
+
+
+/* Parameters for reading axon morphologies from the LHS file */
+axonPopulationSize = 1 // Gets updated later based on selected input file
+noOfAxonMorphologyParameters = 8 // Gets updated later based on selected input file
+
+
+/* Parameters for reading axon perturbations from the Perturbation file */
+axonPerturbationSize = 1 // Gets updated later based on selected input file
+noOfAxonPerturbationVariations = 2 // Gets updated later based on selected input file
+
+
+/* Simulation parameters */
+v_init = -70 //(mV)
+tstop = 2015 //(ms)
+dt = 0.025 //(ms)
+step_per_ms = 40
+holdingCurrent = 0 //(nA)
+
+initialPotential = -70 //(mV)
+initialDuration = 50 //(ms)
+
+
+/* Topology parameters for the soma and dendrites */
+noOfComp = 69
+noOfAux1 = 4
+noOfAux2 = 8
+
+
+/* Topology parameters for the myelinated axon */
+noOfNodes = 101
+noOfParanodeSets = ((2 * noOfNodes) - 2) 
+
+noOfHealthyJuxtaparanodeSets = ((2 * noOfNodes) - 2)
+noOfRemyelinatedJuxtaparanodeSets = 0 // To ensure section creation within template. Gets updated later based on selected perturbation file.
+noOfJuxtaparanodeSets = (noOfHealthyJuxtaparanodeSets + noOfRemyelinatedJuxtaparanodeSets)
+
+noOfHealthyInternodes = (noOfNodes - 1)
+noOfRemyelinatedInternodes = 0 // To ensure section creation within template. Gets updated later based on selected perturbation file.
+noOfInternodes = (noOfHealthyInternodes + noOfRemyelinatedInternodes) 
+noOfOriginalInternodes = noOfHealthyInternodes
+
+
+/* Additional parameters for the myelinated axon */
+axonDiameter = 0.926 //(um) // Gets updated later based on selected input file.
+nodeLength = 0.285 //(um) // Gets updated later based on selected input file.
+myelinSheathLength = 140.8 //(um) // Includes internode, juxtaparanodes and paranodes // Gets updated later based on selected input file.
+numOfLamellae = 7 // Gets updated later based on selected input file.
+lamellaThickness = 0.02 //(um) // Thickness of each layer of myelin // Gets updated later based on selected input file.
+gRatio = 0.786 // Gow-Devaux Method
+
+
+/* Dummy parameters for ion channels */
+dphi_cad   = 52 / 2e-3
+dbeta_cad  = 1 / 100	// In the paper beta = 50 [ms]
+
+dgnaf	= 0.2501575996 // Tuned NernstTest12 // 0.312 // tuned 84 // 150e-3 * 1.25 // default
+dgkdr  	= 0.0513842372 // Tuned NernstTest12 // 1.554 // tuned 84 // 125e-3
+dgka   	= 0
+dgk2   	= 0
+dgkm	= 0.0016943554 // Tuned NernstTest12 // 0.00138 // tuned 84 // 2.5 * 1.5e-3 * 2
+dgkc	= 0
+dgkahp	= 0
+
+dgcad 	= 0
+dgnap 	= 0
+dgcat 	= 0
+dgcal 	= 0
+
+
+/* Kinetics parameters */
+// taumods
+dtmmnaf	= 1 // default
+dtmhnaf	= 1 // default
+dtmkdr	= 1 // default
+dtmkm	= 1 // default
+dtmkc	= 1 // default
+dtmcal	= 1 // default
+dtmmka	= 1 // default
+dtmhka	= 1 // default
+dtmnap	= 1 // default
+dtmar	= 1 // default
+// vshifts
+dvsnaf 	= -3.5 // default
+dvskdr 	= 0 // default
+dvskm 	= 0 // default
+dvskc	= 0 // default
+dvscal	= 0 // default
+dvska	= 0 // default
+dvsnap	= 0 // default
+dvsar	= 0 // default
+
+
+/* Dummy parameters for passive channels */
+dgar = 2.83162e-05 // 1e-10
+dg_pas = 3.95094e-05 // 9.0916e-05
+de_pas = -67.92914 // -69.9598
+dcm = 1.09243 // 1.0 // (manual) // 0.9 // (default)
+
+dRa	  	= 150	// (manual) // 250 // (default)
+dena	= 65.204611 // Using nernst( 115 , 5 , 1 )  // 50 // (default)
+dek		= -75.497 // Using nernst( 115 , 5 , 1 ) // -95 // (default)
+
+
+/* For soma and dendrite ion channel parameters */
+parameterIndex = 2 
+
+
+/* Flags for denoting signal-levels and net-outcome */
+signalFlagNode = -1 // Gets updated later based on simulation outcome.
+signalFlagJuxtaparanode = -1 // Gets updated later based on simulation outcome.
+signalFlagInternode = -1 // Gets updated later based on simulation outcome.
+outcomeFlag = -1 // Gets updated later based on simulation outcome.
+
+/* Parameters for recording */
+proximalLocationFlag = 1//0 // (0: iseg; 1: otherwise)
+proximalLocation = 0 // (If proximalLocationFlag!=0)
+distalLocation = (noOfNodes-2) // (Should be at max (noOfNodes-2) for proc_plotMembranePotentials() to get executed!)
+distalLocationJuxtaparanode = (noOfHealthyJuxtaparanodeSets-1)
+distalLocationInternode = (noOfHealthyInternodes-1)
+
+startTime = 15 //(ms)
+stopTime = 2015 //(ms)
+printingFlag = 1 // (0: no-action; 1: print info)
+
+
+/* Parameters for current injection */
+firstCurrentLevel = 0.38 //(nA)
+finalCurrentLevel = 0.38 //(nA)
+stepCurrentLevel = 0.1 //(nA) (current level increments)
+
+
+/* For the input LHS file */
+strdef inputFileNameMorphologies
+sprint(inputFileNameMorphologies, "axonMorphology_16")
+
+/* For the user-input based LHS file */
+strdef inputFileNameMorphologiesOne
+sprint(inputFileNameMorphologiesOne, "axonMorphology_16")
+strdef inputFileNameMorphologiesTwo
+sprint(inputFileNameMorphologiesTwo, "axonMorphology_48")
+
+
+/* For the input perturbation file */
+strdef inputFileNamePerturbations
+sprint(inputFileNamePerturbations, "axonPerturbation_none")
+
+/* For the user-input based perturbation file */
+strdef inputFileNamePerturbationsNormal
+sprint(inputFileNamePerturbationsNormal, "axonPerturbation_none")
+strdef inputFileNamePerturbationsDem50
+sprint(inputFileNamePerturbationsDem50, "axonPerturbation_Dem50_RL_D_S1")
+strdef inputFileNamePerturbationsRem50
+sprint(inputFileNamePerturbationsRem50, "axonPerturbation_Rem50_RL_A_S1")
+
+
+/* For the output file */
+year = 2023
+month = 07
+date = 06
+simulationID = 1
+
+/* Tracking count of simulations */
+simulationCount = 0 // Gets updated later.
+
+

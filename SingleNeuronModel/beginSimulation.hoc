@@ -1,0 +1,182 @@
+/****************************************************************************************************************************************
+
+    Description: Main File!
+				 Begins the simulation.
+
+    Edit History: Created by Nilapratim Sengupta in December 2021.
+				  Modified by Nilapratim Sengupta in June 2022.
+				  Modified by Nilapratim Sengupta in June 2023 for user-friendly ModelDB entry.
+
+****************************************************************************************************************************************/
+
+/* Loading necessary files */
+load_file("nrngui.hoc")
+load_file("modelParameters.hoc")
+load_file("userInputs.hoc")
+load_file("pyramidalCellCreation.hoc")
+load_file("setupProcedures.hoc")
+load_file("customInitialization.hoc")
+load_file("auxiliaryProcedures.hoc")
+load_file("plotGraphs.hoc")
+
+/* Declaring object reference */
+objref object_modelParameters
+
+/* Declaring string definitions */
+strdef modelLabel, modelCommand, perturbationLabel, perturbationCommand, protocolLabel, protocolCommand
+
+/* Loading date panel */
+{
+	xpanel("Date Panel", 0)
+	xvalue("Year","year", 1)
+	xvalue("Month","month", 1)
+	xvalue("Day","date", 1)
+	xvalue("Simulation ID","simulationID", 1)
+	xpanel(380,25)
+}
+
+/* Loading axon-selection panel */
+{
+	xpanel("Model", 0)
+    for modelChoice = 1, 2 {
+		if (modelChoice == 1) {
+			sprint(modelLabel, "Model with Less Susceptible Axon (#18)   ")
+        	sprint(modelCommand, "proc_userSetMorphologyFile(%d)", modelChoice)
+		} else {
+			sprint(modelLabel, "Model with More Susceptible Axon (#38)   ")
+        	sprint(modelCommand, "proc_userSetMorphologyFile(%d)", modelChoice)
+		}
+        
+        xradiobutton(modelLabel, modelCommand)
+    }
+	xpanel(33,120)
+}
+
+/* Loading perturbation-selection panel */
+{
+	xpanel("Perturbation", 0)
+    for perturbationChoice = 1, 3 {
+		if (perturbationChoice == 1) {
+			sprint(perturbationLabel, "No Perturbation   ")
+        	sprint(perturbationCommand, "proc_userSetPerturbationFile(%d)", perturbationChoice)
+		} else {
+			if (perturbationChoice == 2) {
+				sprint(perturbationLabel, "50%% Demyelination - 100%% lamellae lost   ")
+        		sprint(perturbationCommand, "proc_userSetPerturbationFile(%d)", perturbationChoice)
+			} else {
+				sprint(perturbationLabel, "100%% Remyelination - 75%% lamellae added   ")
+        		sprint(perturbationCommand, "proc_userSetPerturbationFile(%d)", perturbationChoice)
+			}
+		}
+        
+        xradiobutton(perturbationLabel, perturbationCommand)
+    }
+	xpanel(30,220)
+}
+
+
+/* Loading run-control panel */
+{
+	xpanel("Control Panel", 0)
+	for protocolChoice = 1, 2 {
+		if (protocolChoice == 1) {
+			sprint(protocolLabel, "200 ms Test Run   ")
+        	sprint(protocolCommand, "proc_userSetSimTime(%d)", protocolChoice)
+		} else {
+			sprint(protocolLabel, "2000 ms Protocol   ")
+        	sprint(protocolCommand, "proc_userSetSimTime(%d)", protocolChoice)
+		}
+        
+        xradiobutton(protocolLabel, protocolCommand)
+    }
+	xbutton("Run","proc_beginSimulation()")
+	xvalue("Progress","t", 2 )
+	xbutton("Stop","stoprun=1")
+	xvalue("Real Time","realtime", 2 )
+	xbutton("Quit","quit()")
+	xpanel(380,222)
+}
+
+/****************************************************************************************************************************************
+    Name: proc_beginSimulation()
+    Type: Procedure
+
+    Input Parameter(s): None
+    Return Parameter: None
+
+    Description: Procedure to begin simulation time based on user-input through GUI.
+                 
+    Edit History: Created by Nilapratim Sengupta in June 2023 for user-friendly ModelDB entry.
+****************************************************************************************************************************************/
+proc proc_beginSimulation() { 
+
+	/* Updating simulation ID */
+	if (simulationCount != 0) {
+		simulationID = simulationID + 1
+	}
+	
+	/* Clearing job queue */
+	totalJobs = 0
+
+	/* Clearing previous plots (if any) */
+	if (graphList[0].count() != 0) {
+	graph_membranePotentials.erase_all()
+	graph_membranePotentialsExtra.erase_all()
+	}
+
+	/* Output filenames */
+	strdef outputFileName
+	sprint(outputFileName, "%d%s%d%s%d%s%d%s%s", year, "_", month, "_", date, "_", simulationID, "_", "simulationOutput.txt")
+	strdef outputFileNameDetails
+	sprint(outputFileNameDetails, "%d%s%d%s%d%s%d%s%s", year, "_", month, "_", date, "_", simulationID, "_", "detailedOutput.txt")
+
+
+	/* Loading axon morphologies from the LHS file */
+	proc_loadAxonMorphologies(inputFileNameMorphologies) 
+
+	/* Loading axon perturbations from the perturbation file */
+	proc_loadAxonPerturbations(inputFileNamePerturbations) 
+
+	/* Defining geometry and biophysical properties of the pyramidal cell */
+	proc_calculateAxonParameters(axonDiameter, nodeLength, myelinSheathLength, numOfLamellae, lamellaThickness, gRatio) // In the file setupProcedures.hoc
+	proc_setPyramidalCellGeometry() // In the file setupProcedures.hoc
+	proc_setPyramidalCellBiophysics() // In the file setupProcedures.hoc
+	proc_spineCorrection() // In the file setupProcedures.hoc
+
+	/* Adjusting ion channel conductances section-wise */
+	proc_setConductances() // In the file setupProcedures.hoc
+
+	/* Adjusting ion channel kinetics */
+	proc_setKinetics() // In the file setupProcedures.hoc
+
+	/* Updating model parameters */
+	//objref object_modelParameters
+	object_modelParameters = obfunc_setModelParameters()
+	proc_setOneParameterSet(object_modelParameters.getrow(parameterIndex)) // In the file setupProcedures.hoc
+
+	/* Setting up IClamp for the holding and stimulation phases */
+	proc_setupIClamp() // In the file setupProcedures.hoc
+
+
+	/* Running simulation(s) */
+	proc_runSimulation(startTime, stopTime, outputFileName, outputFileNameDetails)
+
+	/* Ensuring visualization of complete plots (if any) */
+	if (graphList[0].count() != 0) {
+	graph_membranePotentials.exec_menu("View = plot")
+	graph_membranePotentialsExtra.exec_menu("View = plot")
+	}
+
+	/* Printing simulation identifier */
+	a = printf("\n\n\nDate: %d_%d_%d", year, month, date)
+	a = printf("\nSimulation ID: %d", simulationID)
+
+	/* Printing on the console to denote the end */
+	a = printf("\n\n\nCompleted!\n\n")
+	simulationCount = simulationCount + 1
+
+} // End of proc_beginSimulation()
+
+
+
+
